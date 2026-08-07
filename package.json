@@ -8,16 +8,22 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "test:profile": "tsx --test src/features/profile/services/profileDomain.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
+    "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-firebase/app": "^26.1.0",
     "@react-native-firebase/auth": "^26.1.0",
+    "@react-native-firebase/firestore": "^26.1.0",
     "expo": "~57.0.11",
     "expo-build-properties": "~57.0.6",
+    "expo-constants": "~57.0.9",
     "expo-dev-client": "~57.0.10",
+    "expo-font": "~57.0.1",
+    "expo-linking": "~57.0.5",
     "expo-router": "~57.0.11",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
@@ -26,9 +32,11 @@
     "react-native-screens": "~4.26.0"
   },
   "devDependencies": {
+    "@types/node": "26.1.2",
     "@types/react": "~19.2.2",
     "eslint": "^9.25.1",
     "eslint-config-expo": "~57.0.1",
+    "tsx": "4.20.6",
     "typescript": "~6.0.3"
   }
 }

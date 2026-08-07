@@ -1,2 +1,10 @@
 packages:
   - "."
+minimumReleaseAge: 1440
+overrides:
+  '@types/node': 26.1.2
+allowBuilds:
+  '@firebase/util': true
+  esbuild: true
+  protobufjs: true
+  unrs-resolver: true

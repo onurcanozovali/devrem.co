@@ -7,11 +7,14 @@ import { LoadingState } from '@/components/common/LoadingState';
 import { ScreenContainer } from '@/components/common/ScreenContainer';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { ProfileProvider } from '@/features/profile/ProfileProvider';
+import { useProfile } from '@/features/profile/hooks/useProfile';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 function RootNavigator() {
   const { colorScheme, colors } = useTheme();
   const { status, initializationError } = useAuth();
+  const { status: profileStatus, error: profileError, refreshProfile } = useProfile();
 
   if (status === 'initializing') {
     return (
@@ -29,6 +32,27 @@ function RootNavigator() {
     );
   }
 
+  if (status === 'authenticated' && (profileStatus === 'idle' || profileStatus === 'loading')) {
+    return (
+      <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}>
+        <LoadingState label="Profiliniz hazırlanıyor…" />
+      </ScreenContainer>
+    );
+  }
+
+  if (status === 'authenticated' && profileStatus === 'error') {
+    return (
+      <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}>
+        <EmptyState
+          title="Profil yüklenemedi"
+          description={profileError ?? 'Profil bilgileri yüklenirken bir sorun oluştu.'}
+          actionLabel="Tekrar dene"
+          onAction={() => void refreshProfile()}
+        />
+      </ScreenContainer>
+    );
+  }
+
   return (
     <>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
@@ -42,8 +66,10 @@ function RootNavigator() {
         <Stack.Protected guard={status === 'unauthenticated'}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
-        <Stack.Protected guard={status === 'authenticated'}>
+        <Stack.Protected guard={status === 'authenticated' && (profileStatus === 'missing' || profileStatus === 'incomplete')}>
           <Stack.Screen name="onboarding" />
+        </Stack.Protected>
+        <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete'}>
           <Stack.Screen name="(tabs)" />
         </Stack.Protected>
       </Stack>
@@ -56,7 +82,9 @@ export default function RootLayout() {
     <AppErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <RootNavigator />
+          <ProfileProvider>
+            <RootNavigator />
+          </ProfileProvider>
         </AuthProvider>
       </ThemeProvider>
     </AppErrorBoundary>
