@@ -16,6 +16,7 @@ Storage, sohbet, eşleşme, hazırlık listesi ve Cloud Functions henüz uygulan
 - TypeScript (strict)
 - Expo Router
 - React Native Firebase App/Auth/Firestore (modular API)
+- React Native Community DateTimePicker (native sistem takvimi)
 - Expo development build
 - React Native Safe Area Context
 - ESLint
@@ -37,6 +38,7 @@ Diğer komutlar:
 pnpm android
 pnpm ios
 pnpm web
+pnpm test:profile
 pnpm typecheck
 pnpm lint
 ```
@@ -200,17 +202,29 @@ lastName
 birthYear
 residenceCity          # 1-81 arasında sabit il/plaka kodu
 departureCity          # 1-81 arasında sabit il/plaka kodu
-militaryType           # standard | paid | reserveOfficer | reserveNco
-militaryPeriod         # { year, month }
 militaryCity           # 1-81 arasında sabit il/plaka kodu
-militaryUnit           # Geçici serbest metin; ileride kontrollü birlik ID'sine taşınacak
-reportingDate          # YYYY-MM-DD
+militaryType           # standard | paid | reserveOfficer | reserveNco
+militaryPeriodYear     # Sayısal, sorgulanabilir celp yılı
+militaryPeriodMonth    # 1-12 arasında sayısal celp ayı
+militaryUnit           # Bilinmiyorsa null; biliniyorsa normalize edilmiş serbest metin
+reportingDate          # Yerel takvimden üretilen YYYY-MM-DD tarih değeri
 onboardingCompleted
 createdAt              # server timestamp
 updatedAt              # server timestamp
 ```
 
-Onboarding dört adımdır: kişisel bilgiler, çıkış şehirleri, askerlik/celp bilgileri ve birlik/teslim tarihi. Profil yazısı Firestore tarafından onaylanmadan onboarding tamamlanmış kabul edilmez.
+Onboarding dört adımdır:
+
+1. Kişisel bilgiler: ad, soyad ve doğum yılı.
+2. Nereye gidiyorsun: yaşanılan şehir, yola çıkılacak şehir ve askerlik şehri.
+3. Askerlik bilgileri: askerlik türü ile ayrı yıl/ay celp seçimi. Yeni kullanıcıya geçmiş dönem gösterilmez.
+4. Birlik ve teslim: birlik bilinmiyorsa `null`, biliniyorsa geçici serbest metin; teslim tarihi native takvimden seçilir.
+
+Teslim tarihi kullanıcının yerel takvim gününden `YYYY-MM-DD` biçimine çevrilir. Bugünden veya seçilen celp ayının ilk gününden önceki bir tarih seçilemez. Profil yazısı Firestore tarafından onaylanmadan onboarding tamamlanmış kabul edilmez.
+
+İleride resmî/kontrollü birlik verisi bulunduğunda `militaryUnit` alanı, `militaryCity` ile filtrelenen `militaryUnitId` ve `militaryUnitName` alanlarına taşınacaktır. Bu fazda sahte birlik listesi tutulmaz ve bilinmeyen birlik değeri üretilmez.
+
+Önceki Phase 2C deneme belgelerindeki `militaryPeriod: { year, month }` alanı güvenli biçimde okunup uygulama içinde yeni düz modele normalize edilir. Zorunlu alanı eksik veya biçimsiz tamamlanmış belgeler hata üretmek yerine eksik kabul edilerek onboarding'e döner. Eski belgelere sessizce şehir, dönem veya birlik değeri uydurulmaz; yeni kayıt tamamlandığında belge güncel şemayla değiştirilir.
 
 Rota kararı kök layout'ta merkezî olarak verilir:
 
@@ -238,7 +252,7 @@ pnpm dlx firebase-tools deploy --only firestore:rules --project <firebase-projec
 
 ### Native development build
 
-`@react-native-firebase/firestore` yeni bir native modül olduğu için Phase 2B development build'i yeterli değildir. Firebase dosya environment variable'ları EAS üzerinde tanımlı kalacak şekilde yeni Android development build oluşturun:
+`@react-native-firebase/firestore` ve native sistem takvimini kullanan `@react-native-community/datetimepicker` development client içine derlenmelidir. Bu bağımlılıkları içermeyen eski build yeterli değildir. Firebase dosya environment variable'ları EAS üzerinde tanımlı kalacak şekilde yeni Android development build oluşturun:
 
 ```bash
 pnpm dlx eas-cli@latest build --profile development --platform android

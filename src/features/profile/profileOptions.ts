@@ -27,16 +27,25 @@ export const monthLabels = [
   'Aralık',
 ] as const;
 
-export const militaryMonthOptions = monthLabels.map((label, index) => ({ value: index + 1, label }));
+const allMilitaryMonthOptions = monthLabels.map((label, index) => ({ value: index + 1, label }));
 
 export function getMilitaryPeriodLabel(year: number, month: number): string {
   const monthLabel = monthLabels[month - 1];
   return monthLabel ? `${monthLabel} ${year}` : `${month}/${year}`;
 }
 
-export function createMilitaryYearOptions(currentYear = new Date().getFullYear()) {
+export function createMilitaryYearOptions(referenceDate = new Date()) {
+  const currentYear = referenceDate.getFullYear();
   return Array.from({ length: 6 }, (_, index) => {
     const year = currentYear + index;
     return { value: year, label: String(year) };
   });
+}
+
+export function createMilitaryMonthOptions(year: number | null, referenceDate = new Date()) {
+  if (year === null || year < referenceDate.getFullYear()) return [];
+  if (year > referenceDate.getFullYear()) return allMilitaryMonthOptions;
+
+  const currentMonth = referenceDate.getMonth() + 1;
+  return allMilitaryMonthOptions.filter(({ value }) => value >= currentMonth);
 }

@@ -67,7 +67,9 @@ export function ProfileScreen() {
       <Card style={{ gap: spacing.lg }}>
         <AppText variant="subtitle" weight="700">Kişisel bilgiler</AppText>
         <ProfileDetail label="Ad Soyad" value={`${profile.firstName} ${profile.lastName}`} />
+        <ProfileDetail label="Doğum yılı" value={String(profile.birthYear)} />
         <ProfileDetail label="Yaşadığı şehir" value={getProvinceName(profile.residenceCity)} />
+        <ProfileDetail label="Yola çıkacağı şehir" value={getProvinceName(profile.departureCity)} />
       </Card>
 
       <Card style={{ gap: spacing.lg }}>
@@ -75,10 +77,10 @@ export function ProfileScreen() {
         <ProfileDetail label="Askerlik türü" value={militaryTypeLabels[profile.militaryType]} />
         <ProfileDetail
           label="Celp dönemi"
-          value={getMilitaryPeriodLabel(profile.militaryPeriod.year, profile.militaryPeriod.month)}
+          value={getMilitaryPeriodLabel(profile.militaryPeriodYear, profile.militaryPeriodMonth)}
         />
         <ProfileDetail label="Gideceği şehir" value={getProvinceName(profile.militaryCity)} />
-        <ProfileDetail label="Birlik" value={profile.militaryUnit} />
+        <ProfileDetail label="Birlik" value={profile.militaryUnit ?? 'Henüz belirtilmedi'} />
         <ProfileDetail label="Teslim tarihi" value={formatStoredDate(profile.reportingDate)} />
       </Card>
 

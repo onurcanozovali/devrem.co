@@ -16,7 +16,10 @@ export function isValidName(value: unknown): value is string {
 }
 
 export function isValidBirthYear(value: unknown, currentYear = new Date().getFullYear()): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1900 && value <= currentYear - 18;
+  return typeof value === 'number'
+    && Number.isInteger(value)
+    && value >= currentYear - 100
+    && value <= currentYear - 18;
 }
 
 export function isValidMilitaryPeriod(year: unknown, month: unknown): boolean {
@@ -31,38 +34,92 @@ export function isValidMilitaryUnit(value: unknown): value is string {
     && normalized.length <= profileFieldLimits.militaryUnitMax;
 }
 
-export function formatReportingDateInput(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 8);
-  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('.');
+export function isValidOptionalMilitaryUnit(value: unknown): value is string | null {
+  return value === null || isValidMilitaryUnit(value);
 }
 
-export function parseReportingDateInput(value: string): string | null {
-  const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value);
-  if (!match) return null;
-
-  const [, dayText, monthText, yearText] = match;
-  const day = Number(dayText);
-  const month = Number(monthText);
-  const year = Number(yearText);
-  const date = new Date(Date.UTC(year, month - 1, day));
-
-  if (
-    date.getUTCFullYear() !== year
-    || date.getUTCMonth() !== month - 1
-    || date.getUTCDate() !== day
-  ) return null;
-
-  return `${yearText}-${monthText}-${dayText}`;
+export function startOfLocalDay(date = new Date()): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 export function isValidStoredDate(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return false;
-  return parseReportingDateInput(`${match[3]}.${match[2]}.${match[1]}`) === value;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+export function storedDateToLocalDate(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match || !isValidStoredDate(value)) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+export function localDateToStoredDate(value: Date): string {
+  const year = String(value.getFullYear()).padStart(4, '0');
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export function formatStoredDate(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  return match ? `${match[3]}.${match[2]}.${match[1]}` : value;
+  const date = storedDateToLocalDate(value);
+  if (!date) return value;
+  return new Intl.DateTimeFormat('tr-TR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
+export function isMilitaryPeriodCurrentOrFuture(
+  year: unknown,
+  month: unknown,
+  referenceDate = new Date(),
+): boolean {
+  if (
+    typeof year !== 'number'
+    || typeof month !== 'number'
+    || !isValidMilitaryPeriod(year, month)
+  ) return false;
+  const currentYear = referenceDate.getFullYear();
+  const currentMonth = referenceDate.getMonth() + 1;
+  return year > currentYear || (year === currentYear && month >= currentMonth);
+}
+
+export function getMinimumReportingDate(
+  militaryPeriodYear: number,
+  militaryPeriodMonth: number,
+  referenceDate = new Date(),
+): Date {
+  const today = startOfLocalDay(referenceDate);
+  const periodStart = new Date(militaryPeriodYear, militaryPeriodMonth - 1, 1);
+  return periodStart > today ? periodStart : today;
+}
+
+export function isReportingDateConsistent(
+  reportingDate: unknown,
+  militaryPeriodYear: unknown,
+  militaryPeriodMonth: unknown,
+  referenceDate = new Date(),
+): boolean {
+  if (
+    !isValidStoredDate(reportingDate)
+    || typeof militaryPeriodYear !== 'number'
+    || typeof militaryPeriodMonth !== 'number'
+    || !isValidMilitaryPeriod(militaryPeriodYear, militaryPeriodMonth)
+  ) return false;
+
+  const selectedDate = storedDateToLocalDate(reportingDate);
+  if (!selectedDate) return false;
+  return selectedDate >= getMinimumReportingDate(
+    militaryPeriodYear,
+    militaryPeriodMonth,
+    referenceDate,
+  );
 }

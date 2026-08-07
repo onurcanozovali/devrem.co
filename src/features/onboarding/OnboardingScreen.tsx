@@ -1,37 +1,43 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { ScreenContainer } from '@/components/common/ScreenContainer';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { DatePickerField } from '@/components/ui/DatePickerField';
 import { SelectField } from '@/components/ui/SelectField';
 import { TextField } from '@/components/ui/TextField';
 import { turkeyProvinces, type ProvinceCode } from '@/data/turkeyProvinces';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import {
+  createMilitaryMonthOptions,
   createMilitaryYearOptions,
-  militaryMonthOptions,
   militaryTypeOptions,
 } from '@/features/profile/profileOptions';
 import { ProfileFlowError, mapProfileError } from '@/features/profile/services/profileErrors';
 import {
-  formatReportingDateInput,
+  formatStoredDate,
+  getMinimumReportingDate,
+  isMilitaryPeriodCurrentOrFuture,
+  isReportingDateConsistent,
   isValidBirthYear,
   isValidMilitaryUnit,
   isValidName,
+  localDateToStoredDate,
   normalizeWhitespace,
-  parseReportingDateInput,
   profileFieldLimits,
+  startOfLocalDay,
 } from '@/features/profile/services/profileValidation';
 import type { CompleteUserProfileInput, MilitaryType } from '@/features/profile/types/profile';
 import { useTheme } from '@/theme/ThemeProvider';
 
 const steps = [
-  { title: 'Kişisel Bilgiler', description: 'Sana hitap edebilmemiz için temel bilgilerini ekle.' },
-  { title: 'Nereden Gidiyorsun?', description: 'Yolculuk başlangıcını şehir kodlarıyla güvenli biçimde kaydedelim.' },
-  { title: 'Askerlik Bilgileri', description: 'Celp dönemini ve görev yerini belirle.' },
-  { title: 'Birlik ve Teslim', description: 'Son olarak birlik ve teslim tarihi bilgilerini tamamla.' },
+  { title: 'Kişisel Bilgiler', description: 'Seni tanımamız için birkaç temel bilgi.' },
+  { title: 'Nereye Gidiyorsun?', description: 'Yolculuğunun başlangıç ve varış şehirlerini seç.' },
+  { title: 'Askerlik Bilgileri', description: 'Askerlik türünü ve yaklaşan celp dönemini belirt.' },
+  { title: 'Birlik ve Teslim', description: 'Bildiğin birlik bilgisini ve teslim tarihini ekle.' },
 ] as const;
 
 const provinceOptions = turkeyProvinces.map(({ code, name }) => ({ value: code, label: name }));
@@ -42,10 +48,10 @@ type FieldName =
   | 'birthYear'
   | 'residenceCity'
   | 'departureCity'
+  | 'militaryCity'
   | 'militaryType'
   | 'militaryYear'
   | 'militaryMonth'
-  | 'militaryCity'
   | 'militaryUnit'
   | 'reportingDate';
 
@@ -54,27 +60,69 @@ type FormErrors = Partial<Record<FieldName, string>>;
 export function OnboardingScreen() {
   const { completeOnboarding } = useProfile();
   const { colors, radii, spacing } = useTheme();
+  const [referenceDate] = useState(() => new Date());
   const [step, setStep] = useState(0);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [birthYear, setBirthYear] = useState('');
   const [residenceCity, setResidenceCity] = useState<ProvinceCode | null>(null);
   const [departureCity, setDepartureCity] = useState<ProvinceCode | null>(null);
+  const [militaryCity, setMilitaryCity] = useState<ProvinceCode | null>(null);
   const [militaryType, setMilitaryType] = useState<MilitaryType | null>(null);
   const [militaryYear, setMilitaryYear] = useState<number | null>(null);
   const [militaryMonth, setMilitaryMonth] = useState<number | null>(null);
-  const [militaryCity, setMilitaryCity] = useState<ProvinceCode | null>(null);
+  const [knowsMilitaryUnit, setKnowsMilitaryUnit] = useState(false);
   const [militaryUnit, setMilitaryUnit] = useState('');
-  const [reportingDate, setReportingDate] = useState('');
+  const [reportingDate, setReportingDate] = useState<Date | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const yearOptions = useMemo(() => createMilitaryYearOptions(), []);
+
+  const yearOptions = useMemo(() => createMilitaryYearOptions(referenceDate), [referenceDate]);
+  const monthOptions = useMemo(
+    () => createMilitaryMonthOptions(militaryYear, referenceDate),
+    [militaryYear, referenceDate],
+  );
+  const minimumReportingDate = useMemo(
+    () => militaryYear !== null && militaryMonth !== null
+      ? getMinimumReportingDate(militaryYear, militaryMonth, referenceDate)
+      : startOfLocalDay(referenceDate),
+    [militaryMonth, militaryYear, referenceDate],
+  );
   const currentStep = steps[step] ?? steps[0];
 
   const clearError = (field: FieldName) => {
     setErrors((current) => ({ ...current, [field]: undefined }));
     if (submissionError) setSubmissionError(null);
+  };
+
+  const keepReportingDateIfConsistent = (year: number | null, month: number | null) => {
+    if (!reportingDate) return;
+    if (year === null || month === null) {
+      setReportingDate(null);
+      return;
+    }
+    if (!isReportingDateConsistent(localDateToStoredDate(reportingDate), year, month, referenceDate)) {
+      setReportingDate(null);
+    }
+  };
+
+  const handleMilitaryYearChange = (year: number) => {
+    const nextMonth = militaryMonth !== null
+      && isMilitaryPeriodCurrentOrFuture(year, militaryMonth, referenceDate)
+      ? militaryMonth
+      : null;
+    setMilitaryYear(year);
+    setMilitaryMonth(nextMonth);
+    keepReportingDateIfConsistent(year, nextMonth);
+    clearError('militaryYear');
+    if (nextMonth === null) clearError('militaryMonth');
+  };
+
+  const handleMilitaryMonthChange = (month: number) => {
+    setMilitaryMonth(month);
+    keepReportingDateIfConsistent(militaryYear, month);
+    clearError('militaryMonth');
   };
 
   const validateStep = (): boolean => {
@@ -83,24 +131,44 @@ export function OnboardingScreen() {
     if (step === 0) {
       if (!isValidName(firstName)) nextErrors.firstName = `Ad ${profileFieldLimits.nameMin}-${profileFieldLimits.nameMax} karakter olmalı.`;
       if (!isValidName(lastName)) nextErrors.lastName = `Soyad ${profileFieldLimits.nameMin}-${profileFieldLimits.nameMax} karakter olmalı.`;
-      if (!isValidBirthYear(Number(birthYear))) nextErrors.birthYear = 'Geçerli bir doğum yılı girin.';
+      if (!isValidBirthYear(Number(birthYear), referenceDate.getFullYear())) {
+        nextErrors.birthYear = `${referenceDate.getFullYear() - 100}-${referenceDate.getFullYear() - 18} arasında bir yıl gir.`;
+      }
     }
 
     if (step === 1) {
-      if (!residenceCity) nextErrors.residenceCity = 'Yaşadığınız şehri seçin.';
-      if (!departureCity) nextErrors.departureCity = 'Yola çıkacağınız şehri seçin.';
+      if (!residenceCity) nextErrors.residenceCity = 'Yaşadığın şehri seç.';
+      if (!departureCity) nextErrors.departureCity = 'Yola çıkacağın şehri seç.';
+      if (!militaryCity) nextErrors.militaryCity = 'Gideceğin şehri seç.';
     }
 
     if (step === 2) {
-      if (!militaryType) nextErrors.militaryType = 'Askerlik türünü seçin.';
-      if (!militaryYear) nextErrors.militaryYear = 'Celp yılını seçin.';
-      if (!militaryMonth) nextErrors.militaryMonth = 'Celp ayını seçin.';
-      if (!militaryCity) nextErrors.militaryCity = 'Gideceğiniz şehri seçin.';
+      if (!militaryType) nextErrors.militaryType = 'Askerlik türünü seç.';
+      if (!militaryYear) nextErrors.militaryYear = 'Celp yılını seç.';
+      if (!militaryMonth) nextErrors.militaryMonth = 'Celp ayını seç.';
+      if (
+        militaryYear !== null
+        && militaryMonth !== null
+        && !isMilitaryPeriodCurrentOrFuture(militaryYear, militaryMonth, referenceDate)
+      ) nextErrors.militaryMonth = 'Geçmiş bir celp dönemi seçilemez.';
     }
 
     if (step === 3) {
-      if (!isValidMilitaryUnit(militaryUnit)) nextErrors.militaryUnit = `Birlik ${profileFieldLimits.militaryUnitMin}-${profileFieldLimits.militaryUnitMax} karakter olmalı.`;
-      if (!parseReportingDateInput(reportingDate)) nextErrors.reportingDate = 'Teslim tarihini GG.AA.YYYY biçiminde girin.';
+      if (knowsMilitaryUnit && !isValidMilitaryUnit(militaryUnit)) {
+        nextErrors.militaryUnit = `Birlik adı ${profileFieldLimits.militaryUnitMin}-${profileFieldLimits.militaryUnitMax} karakter olmalı.`;
+      }
+      const storedReportingDate = reportingDate ? localDateToStoredDate(reportingDate) : null;
+      if (
+        !storedReportingDate
+        || militaryYear === null
+        || militaryMonth === null
+        || !isReportingDateConsistent(
+          storedReportingDate,
+          militaryYear,
+          militaryMonth,
+          referenceDate,
+        )
+      ) nextErrors.reportingDate = 'Bugünden ve seçtiğin celp döneminden önce olmayan bir tarih seç.';
     }
 
     setErrors(nextErrors);
@@ -108,19 +176,27 @@ export function OnboardingScreen() {
   };
 
   const buildProfileInput = (): CompleteUserProfileInput | null => {
-    const storedReportingDate = parseReportingDateInput(reportingDate);
+    const storedReportingDate = reportingDate ? localDateToStoredDate(reportingDate) : null;
+    const normalizedUnit = knowsMilitaryUnit ? normalizeWhitespace(militaryUnit) : null;
     if (
       !isValidName(firstName)
       || !isValidName(lastName)
-      || !isValidBirthYear(Number(birthYear))
+      || !isValidBirthYear(Number(birthYear), referenceDate.getFullYear())
       || residenceCity === null
       || departureCity === null
+      || militaryCity === null
       || militaryType === null
       || militaryYear === null
       || militaryMonth === null
-      || militaryCity === null
-      || !isValidMilitaryUnit(militaryUnit)
+      || !isMilitaryPeriodCurrentOrFuture(militaryYear, militaryMonth, referenceDate)
+      || (knowsMilitaryUnit && !isValidMilitaryUnit(normalizedUnit))
       || storedReportingDate === null
+      || !isReportingDateConsistent(
+        storedReportingDate,
+        militaryYear,
+        militaryMonth,
+        referenceDate,
+      )
     ) return null;
 
     return {
@@ -129,10 +205,11 @@ export function OnboardingScreen() {
       birthYear: Number(birthYear),
       residenceCity,
       departureCity,
-      militaryType,
-      militaryPeriod: { year: militaryYear, month: militaryMonth },
       militaryCity,
-      militaryUnit: normalizeWhitespace(militaryUnit),
+      militaryType,
+      militaryPeriodYear: militaryYear,
+      militaryPeriodMonth: militaryMonth,
+      militaryUnit: normalizedUnit,
       reportingDate: storedReportingDate,
     };
   };
@@ -148,7 +225,7 @@ export function OnboardingScreen() {
 
     const input = buildProfileInput();
     if (!input) {
-      setSubmissionError('Bazı bilgiler eksik veya geçersiz. Önceki adımları kontrol edin.');
+      setSubmissionError('Bazı bilgiler eksik veya geçersiz. Önceki adımları kontrol et.');
       return;
     }
 
@@ -163,9 +240,42 @@ export function OnboardingScreen() {
     }
   };
 
+  const renderUnitChoice = (known: boolean, label: string) => {
+    const selected = knowsMilitaryUnit === known;
+    return (
+      <Pressable
+        accessibilityRole="radio"
+        accessibilityState={{ selected }}
+        onPress={() => {
+          setKnowsMilitaryUnit(known);
+          clearError('militaryUnit');
+        }}
+        style={({ pressed }) => ({
+          alignItems: 'center',
+          backgroundColor: selected || pressed ? colors.surfaceSubtle : colors.surface,
+          borderColor: selected ? colors.primary : colors.border,
+          borderRadius: radii.md,
+          borderWidth: 1,
+          flex: 1,
+          flexDirection: 'row',
+          gap: spacing.sm,
+          minHeight: 54,
+          paddingHorizontal: spacing.md,
+        })}
+      >
+        <Ionicons
+          name={selected ? 'radio-button-on' : 'radio-button-off'}
+          size={20}
+          color={selected ? colors.primary : colors.textMuted}
+        />
+        <AppText weight={selected ? '700' : '500'} style={{ flex: 1 }}>{label}</AppText>
+      </Pressable>
+    );
+  };
+
   return (
     <ScreenContainer contentContainerStyle={{ gap: spacing.xl, paddingBottom: spacing.xl }}>
-      <View style={{ gap: spacing.md, paddingTop: spacing.md }}>
+      <View style={{ gap: spacing.md, paddingTop: spacing.sm }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radii.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
             <AppText weight="800" style={{ color: colors.primary }}>DEVREM</AppText>
@@ -187,7 +297,7 @@ export function OnboardingScreen() {
           ))}
         </View>
 
-        <View style={{ gap: spacing.sm }}>
+        <View style={{ gap: spacing.xs }}>
           <AppText variant="title" weight="800">{currentStep.title}</AppText>
           <AppText color="muted">{currentStep.description}</AppText>
         </View>
@@ -223,7 +333,7 @@ export function OnboardingScreen() {
               value={birthYear}
               onChangeText={(value) => { setBirthYear(value.replace(/\D/g, '').slice(0, 4)); clearError('birthYear'); }}
               error={errors.birthYear}
-              placeholder="2000"
+              placeholder={String(referenceDate.getFullYear() - 24)}
               keyboardType="number-pad"
               maxLength={4}
             />
@@ -233,7 +343,7 @@ export function OnboardingScreen() {
         {step === 1 ? (
           <>
             <SelectField
-              label="Yaşadığın şehir"
+              label="Yaşadığın Şehir"
               placeholder="Şehir seç"
               value={residenceCity}
               options={provinceOptions}
@@ -246,12 +356,21 @@ export function OnboardingScreen() {
               searchPlaceholder="İl ara"
             />
             <SelectField
-              label="Yola çıkacağın şehir"
+              label="Yola Çıkacağın Şehir"
               placeholder="Şehir seç"
               value={departureCity}
               options={provinceOptions}
               onValueChange={(value) => { setDepartureCity(value); clearError('departureCity'); }}
               error={errors.departureCity}
+              searchPlaceholder="İl ara"
+            />
+            <SelectField
+              label="Gideceğin Şehir"
+              placeholder="Şehir seç"
+              value={militaryCity}
+              options={provinceOptions}
+              onValueChange={(value) => { setMilitaryCity(value); clearError('militaryCity'); }}
+              error={errors.militaryCity}
               searchPlaceholder="İl ara"
             />
           </>
@@ -274,55 +393,64 @@ export function OnboardingScreen() {
                   placeholder="Yıl"
                   value={militaryYear}
                   options={yearOptions}
-                  onValueChange={(value) => { setMilitaryYear(value); clearError('militaryYear'); }}
+                  onValueChange={handleMilitaryYearChange}
                   error={errors.militaryYear}
                 />
               </View>
               <View style={{ flex: 1 }}>
                 <SelectField
                   label="Celp ayı"
-                  placeholder="Ay"
+                  placeholder={militaryYear === null ? 'Önce yıl' : 'Ay'}
                   value={militaryMonth}
-                  options={militaryMonthOptions}
-                  onValueChange={(value) => { setMilitaryMonth(value); clearError('militaryMonth'); }}
+                  options={monthOptions}
+                  onValueChange={handleMilitaryMonthChange}
                   error={errors.militaryMonth}
+                  disabled={militaryYear === null}
                 />
               </View>
             </View>
-            <SelectField
-              label="Gideceğin şehir"
-              placeholder="Şehir seç"
-              value={militaryCity}
-              options={provinceOptions}
-              onValueChange={(value) => { setMilitaryCity(value); clearError('militaryCity'); }}
-              error={errors.militaryCity}
-              searchPlaceholder="İl ara"
-            />
+            <AppText color="muted" variant="caption">
+              Yalnızca içinde bulunduğun ay ve sonraki celp dönemleri gösterilir.
+            </AppText>
           </>
         ) : null}
 
         {step === 3 ? (
           <>
-            <TextField
-              label="Birlik"
-              value={militaryUnit}
-              onChangeText={(value) => { setMilitaryUnit(value); clearError('militaryUnit'); }}
-              error={errors.militaryUnit}
-              placeholder="Örn. 5. Piyade Eğitim Tugayı"
-              autoCapitalize="sentences"
-              maxLength={profileFieldLimits.militaryUnitMax}
-            />
-            <AppText color="muted" variant="caption">
-              Birlik alanı bu fazda elle girilir; resmî birlik veritabanı eklendiğinde kontrollü kimliklere geçirilecektir.
-            </AppText>
-            <TextField
+            <View style={{ gap: spacing.sm }}>
+              <AppText weight="600">Birlik bilgin var mı?</AppText>
+              <View style={{ gap: spacing.sm }}>
+                {renderUnitChoice(false, 'Birliğimi henüz bilmiyorum')}
+                {renderUnitChoice(true, 'Birliğimi biliyorum')}
+              </View>
+            </View>
+
+            {knowsMilitaryUnit ? (
+              <TextField
+                label="Birlik adı"
+                value={militaryUnit}
+                onChangeText={(value) => { setMilitaryUnit(value); clearError('militaryUnit'); }}
+                error={errors.militaryUnit}
+                placeholder="Örn. 5. Piyade Eğitim Tugayı"
+                autoCapitalize="sentences"
+                maxLength={profileFieldLimits.militaryUnitMax}
+              />
+            ) : (
+              <AppText color="muted" variant="caption">
+                Sorun değil; birlik bilgini daha sonra ekleyebilirsin.
+              </AppText>
+            )}
+
+            <DatePickerField
               label="Teslim tarihi"
               value={reportingDate}
-              onChangeText={(value) => { setReportingDate(formatReportingDateInput(value)); clearError('reportingDate'); }}
+              minimumDate={minimumReportingDate}
+              onValueChange={(value) => {
+                setReportingDate(value);
+                clearError('reportingDate');
+              }}
               error={errors.reportingDate}
-              placeholder="GG.AA.YYYY"
-              keyboardType="number-pad"
-              maxLength={10}
+              hint={`Seçilebilecek en erken tarih: ${formatStoredDate(localDateToStoredDate(minimumReportingDate))}`}
             />
           </>
         ) : null}

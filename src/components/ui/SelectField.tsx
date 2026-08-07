@@ -21,6 +21,7 @@ interface SelectFieldProps<T extends SelectValue> {
   error?: string | null;
   searchable?: boolean;
   searchPlaceholder?: string;
+  disabled?: boolean;
 }
 
 export function SelectField<T extends SelectValue>({
@@ -32,6 +33,7 @@ export function SelectField<T extends SelectValue>({
   error,
   searchable = options.length > 12,
   searchPlaceholder = 'Ara',
+  disabled = false,
 }: SelectFieldProps<T>) {
   const { colors, radii, spacing, typography } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
@@ -54,6 +56,8 @@ export function SelectField<T extends SelectValue>({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${selectedOption?.label ?? 'seçilmedi'}`}
+        accessibilityState={{ disabled }}
+        disabled={disabled}
         onPress={() => setIsOpen(true)}
         style={({ pressed }) => ({
           alignItems: 'center',
@@ -65,6 +69,7 @@ export function SelectField<T extends SelectValue>({
           justifyContent: 'space-between',
           minHeight: 54,
           paddingHorizontal: spacing.md,
+          opacity: disabled ? 0.55 : 1,
         })}
       >
         <AppText color={selectedOption ? 'default' : 'muted'}>{selectedOption?.label ?? placeholder}</AppText>

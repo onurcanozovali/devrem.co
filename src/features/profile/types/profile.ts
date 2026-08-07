@@ -4,21 +4,17 @@ export const militaryTypes = ['standard', 'paid', 'reserveOfficer', 'reserveNco'
 
 export type MilitaryType = (typeof militaryTypes)[number];
 
-export interface MilitaryPeriod {
-  month: number;
-  year: number;
-}
-
 export interface CompleteUserProfileInput {
   firstName: string;
   lastName: string;
   birthYear: number;
   residenceCity: ProvinceCode;
   departureCity: ProvinceCode;
-  militaryType: MilitaryType;
-  militaryPeriod: MilitaryPeriod;
   militaryCity: ProvinceCode;
-  militaryUnit: string;
+  militaryType: MilitaryType;
+  militaryPeriodYear: number;
+  militaryPeriodMonth: number;
+  militaryUnit: string | null;
   reportingDate: string;
 }
 

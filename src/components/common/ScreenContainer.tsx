@@ -11,7 +11,7 @@ interface ScreenContainerProps extends ScrollViewProps {
 export function ScreenContainer({ children, scrollable = true, contentContainerStyle, ...props }: PropsWithChildren<ScreenContainerProps>) {
   const { colors, spacing } = useTheme();
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           {...props}
