@@ -4,6 +4,8 @@ node_modules/
 dist/
 web-build/
 build/
+/android/
+/ios/
 *.log
 .DS_Store
 Thumbs.db
@@ -18,6 +20,7 @@ Thumbs.db
 *.keystore
 google-services.json
 GoogleService-Info.plist
+config/firebase/
 *service-account*.json
 serviceAccountKey.json
 firebase-adminsdk*.json

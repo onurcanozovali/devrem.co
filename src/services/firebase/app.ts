@@ -1,14 +1,24 @@
-import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
+import { getApp, type FirebaseApp } from '@react-native-firebase/app';
 
 import { getAppConfig } from '@/config/env';
 
+class FirebaseConfigurationError extends Error {
+  readonly code = 'auth/app-not-authorized';
+}
+
 /**
- * Returns the single Firebase client app for the current environment.
- * Initialization is lazy so Phase 1 screens can run before Firebase is used.
+ * Returns the native default Firebase app configured by the platform files.
+ * The project ID check prevents an environment from using another environment's native app.
  */
 export function getFirebaseApp(): FirebaseApp {
-  if (getApps().length > 0) return getApp();
+  const app = getApp();
+  const { environment, firebase } = getAppConfig();
 
-  const { firebase } = getAppConfig();
-  return initializeApp(firebase);
+  if (app.options.projectId !== firebase.projectId) {
+    throw new FirebaseConfigurationError(
+      `Firebase project mismatch for the ${environment} environment. Check the native Firebase configuration file.`,
+    );
+  }
+
+  return app;
 }

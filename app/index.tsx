@@ -1,5 +1,8 @@
 import { Redirect } from 'expo-router';
 
+import { useAuth } from '@/features/auth/hooks/useAuth';
+
 export default function IndexRoute() {
-  return <Redirect href="/onboarding" />;
+  const { status } = useAuth();
+  return <Redirect href={status === 'authenticated' ? '/(tabs)' : '/phone'} />;
 }
