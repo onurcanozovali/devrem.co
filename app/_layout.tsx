@@ -9,6 +9,7 @@ import { AuthProvider } from '@/features/auth/AuthProvider';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
 import { useProfile } from '@/features/profile/hooks/useProfile';
+import { PreparationProvider } from '@/features/preparation/PreparationProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 function RootNavigator() {
@@ -83,7 +84,9 @@ export default function RootLayout() {
       <ThemeProvider>
         <AuthProvider>
           <ProfileProvider>
-            <RootNavigator />
+            <PreparationProvider>
+              <RootNavigator />
+            </PreparationProvider>
           </ProfileProvider>
         </AuthProvider>
       </ThemeProvider>
