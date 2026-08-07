@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Devrem",
+    "slug": "devrem",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "devrem",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.devrem.app"
+    },
+    "android": {
+      "package": "com.devrem.app",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
