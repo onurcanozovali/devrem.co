@@ -1,0 +1,107 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwnProfile(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function hasValidProfileShape(uid) {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'uid',
+          'firstName',
+          'lastName',
+          'birthYear',
+          'residenceCity',
+          'departureCity',
+          'militaryType',
+          'militaryPeriod',
+          'militaryCity',
+          'militaryUnit',
+          'reportingDate',
+          'onboardingCompleted',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'firstName',
+          'lastName',
+          'birthYear',
+          'residenceCity',
+          'departureCity',
+          'militaryType',
+          'militaryPeriod',
+          'militaryCity',
+          'militaryUnit',
+          'reportingDate',
+          'onboardingCompleted',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.uid == uid
+        && data.firstName is string
+        && data.firstName.size() >= 2
+        && data.firstName.size() <= 50
+        && data.lastName is string
+        && data.lastName.size() >= 2
+        && data.lastName.size() <= 50
+        && data.birthYear is int
+        && data.birthYear >= request.time.year() - 100
+        && data.birthYear <= request.time.year() - 18
+        && data.residenceCity is int
+        && data.residenceCity >= 1
+        && data.residenceCity <= 81
+        && data.departureCity is int
+        && data.departureCity >= 1
+        && data.departureCity <= 81
+        && data.militaryType in ['standard', 'paid', 'reserveOfficer', 'reserveNco']
+        && data.militaryPeriod is map
+        && data.militaryPeriod.keys().hasAll(['year', 'month'])
+        && data.militaryPeriod.keys().hasOnly(['year', 'month'])
+        && data.militaryPeriod.year is int
+        && data.militaryPeriod.year >= 2020
+        && data.militaryPeriod.year <= 2100
+        && data.militaryPeriod.month is int
+        && data.militaryPeriod.month >= 1
+        && data.militaryPeriod.month <= 12
+        && data.militaryCity is int
+        && data.militaryCity >= 1
+        && data.militaryCity <= 81
+        && data.militaryUnit is string
+        && data.militaryUnit.size() >= 2
+        && data.militaryUnit.size() <= 120
+        && data.reportingDate is string
+        && data.reportingDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.onboardingCompleted is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwnProfile(uid);
+
+      allow create: if isOwnProfile(uid)
+        && hasValidProfileShape(uid)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isOwnProfile(uid)
+        && hasValidProfileShape(uid)
+        && resource.data.uid == uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

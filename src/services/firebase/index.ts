@@ -5,3 +5,4 @@ export {
   signOutCurrentUser,
   subscribeToAuthState,
 } from './auth';
+export { fetchUserProfile, saveCompletedUserProfile } from './firestore';
