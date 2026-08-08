@@ -91,6 +91,102 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function hasValidPreparationItemShape(itemId) {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'id',
+          'title',
+          'category',
+          'completed',
+          'source',
+          'sortOrder',
+          'priority',
+          'helper',
+          'templateKey',
+          'templateVersion',
+          'createdAt',
+          'updatedAt',
+          'completedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'title',
+          'category',
+          'completed',
+          'source',
+          'sortOrder',
+          'priority',
+          'helper',
+          'templateKey',
+          'templateVersion',
+          'createdAt',
+          'updatedAt',
+          'completedAt'
+        ])
+        && data.id == itemId
+        && data.title is string
+        && data.title.size() >= 2
+        && data.title.size() <= 100
+        && data.category in [
+          'official',
+          'documents',
+          'travel',
+          'moneyCommunication',
+          'personal',
+          'bagEquipment'
+        ]
+        && data.completed is bool
+        && data.source in ['default', 'custom']
+        && data.sortOrder is int
+        && data.sortOrder >= 0
+        && data.sortOrder <= 1000000
+        && data.priority in ['normal', 'important']
+        && (
+          data.helper == null
+          || (data.helper is string && data.helper.size() <= 240)
+        )
+        && (
+          data.templateKey == null
+          || (data.templateKey is string && data.templateKey.size() >= 1 && data.templateKey.size() <= 100)
+        )
+        && (
+          data.templateVersion == null
+          || (data.templateVersion is int && data.templateVersion >= 1 && data.templateVersion <= 100)
+        )
+        && (
+          (data.source == 'default' && data.templateKey is string && data.templateVersion is int)
+          || (data.source == 'custom' && data.templateKey == null && data.templateVersion == null)
+        )
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (
+          (data.completed == true && data.completedAt is timestamp)
+          || (data.completed == false && data.completedAt == null)
+        );
+    }
+
+    function hasValidPreparationStateShape() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'templateVersion',
+          'longPressHintDismissed',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'templateVersion',
+          'longPressHintDismissed',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.templateVersion is int
+        && data.templateVersion >= 0
+        && data.templateVersion <= 100
+        && data.longPressHintDismissed is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     match /users/{uid} {
       allow read: if isOwnProfile(uid);
 
@@ -102,6 +198,49 @@ service cloud.firestore {
       allow update: if isOwnProfile(uid)
         && hasValidProfileShape(uid)
         && resource.data.uid == uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
+    match /users/{uid}/preparationItems/{itemId} {
+      allow read: if isOwnProfile(uid);
+
+      allow create: if isOwnProfile(uid)
+        && hasValidPreparationItemShape(itemId)
+        && request.resource.data.completed == false
+        && request.resource.data.completedAt == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isOwnProfile(uid)
+        && hasValidPreparationItemShape(itemId)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.source == resource.data.source
+        && request.resource.data.priority == resource.data.priority
+        && request.resource.data.helper == resource.data.helper
+        && request.resource.data.templateKey == resource.data.templateKey
+        && request.resource.data.templateVersion == resource.data.templateVersion
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if isOwnProfile(uid);
+    }
+
+    match /users/{uid}/preparationState/{stateId} {
+      allow read: if isOwnProfile(uid) && stateId == 'main';
+
+      allow create: if isOwnProfile(uid)
+        && stateId == 'main'
+        && hasValidPreparationStateShape()
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isOwnProfile(uid)
+        && stateId == 'main'
+        && hasValidPreparationStateShape()
+        && request.resource.data.templateVersion >= resource.data.templateVersion
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
 
