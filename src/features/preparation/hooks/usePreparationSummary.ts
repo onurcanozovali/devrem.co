@@ -1,9 +1,8 @@
 import { useMemo } from 'react';
 
 import { calculatePreparationSummary } from '../services/preparationDomain';
-import { usePreparation } from './usePreparation';
+import type { PreparationItem } from '../types/preparation';
 
-export function usePreparationSummary() {
-  const { items } = usePreparation();
+export function usePreparationSummary(items: PreparationItem[]) {
   return useMemo(() => calculatePreparationSummary(items), [items]);
 }

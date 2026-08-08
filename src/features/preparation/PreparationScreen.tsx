@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, LayoutAnimation, Pressable, StyleSheet, View } from 'react-native';
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { LoadingState } from '@/components/common/LoadingState';
@@ -9,7 +9,6 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/theme/ThemeProvider';
-import { PreparationItemActionsModal } from './components/PreparationItemActionsModal';
 import {
   PreparationItemFormModal,
   type PreparationFormMode,
@@ -33,7 +32,6 @@ export function PreparationScreen() {
     state,
     error,
     actionError,
-    pendingItemIds,
     startPreparation,
     retryPreparation,
     addItem,
@@ -44,9 +42,9 @@ export function PreparationScreen() {
     dismissHint,
     clearActionError,
   } = usePreparation();
-  const summary = usePreparationSummary();
+  const summary = usePreparationSummary(items);
   const [collapsedCategories, setCollapsedCategories] = useState<ReadonlySet<string>>(new Set());
-  const [actionsItem, setActionsItem] = useState<PreparationItem | null>(null);
+  const [actionsItemId, setActionsItemId] = useState<string | null>(null);
   const [formState, setFormState] = useState<FormState | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -62,37 +60,44 @@ export function PreparationScreen() {
     ]),
   ), [items]);
 
-  const openItemActions = (item: PreparationItem) => {
-    setActionsItem(item);
+  const closeItemActions = useCallback(() => setActionsItemId(null), []);
+
+  const openItemActions = useCallback((item: PreparationItem) => {
+    setActionsItemId(item.id);
     if (!state?.longPressHintDismissed) void dismissHint();
-  };
+  }, [dismissHint, state?.longPressHintDismissed]);
 
-  const openFormFromActions = (mode: 'edit' | 'category') => {
-    const item = actionsItem;
-    setActionsItem(null);
-    if (item) setTimeout(() => setFormState({ mode, item }), 180);
-  };
+  const editItemFromActions = useCallback((item: PreparationItem) => {
+    setActionsItemId(null);
+    setFormState({ mode: 'edit', item });
+  }, []);
 
-  const requestDelete = () => {
-    const item = actionsItem;
-    setActionsItem(null);
-    if (!item) return;
+  const requestDelete = useCallback((item: PreparationItem) => {
+    setActionsItemId(null);
     const description = item.source === 'default'
       ? 'Bu varsayılan görev listenden kaldırılır. İstersen daha sonra eksik varsayılanları geri yükleyebilirsin.'
       : 'Bu görev hazırlık listenden kaldırılır.';
-    setTimeout(() => {
-      Alert.alert('Görev silinsin mi?', description, [
-        { text: 'Vazgeç', style: 'cancel' },
-        {
-          text: 'Sil',
-          style: 'destructive',
-          onPress: () => {
-            void deleteItem(item).catch(() => undefined);
-          },
+    Alert.alert('Görev silinsin mi?', description, [
+      { text: 'Vazgeç', style: 'cancel' },
+      {
+        text: 'Sil',
+        style: 'destructive',
+        onPress: () => {
+          LayoutAnimation.configureNext({
+            duration: 180,
+            update: { type: LayoutAnimation.Types.easeInEaseOut },
+            delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+          });
+          void deleteItem(item).catch(() => undefined);
         },
-      ]);
-    }, 180);
-  };
+      },
+    ]);
+  }, [deleteItem]);
+
+  const togglePreparationItem = useCallback((itemId: string) => {
+    setActionsItemId(null);
+    void toggleItem(itemId).catch(() => undefined);
+  }, [toggleItem]);
 
   const submitForm = async (input: PreparationItemInput) => {
     if (formState?.mode === 'create') {
@@ -152,7 +157,8 @@ export function PreparationScreen() {
 
   return (
     <>
-      <ScreenContainer contentContainerStyle={{ gap: spacing.lg, paddingBottom: spacing.xxl }}>
+      <ScreenContainer contentContainerStyle={{ paddingBottom: spacing.xxl }} onScrollBeginDrag={closeItemActions}>
+        <Pressable accessible={false} onPress={closeItemActions} style={{ gap: spacing.lg }}>
         <View style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.md }}>
           <View style={{ flex: 1 }}>
             <AppText variant="title" weight="800">Hazırlık</AppText>
@@ -286,9 +292,12 @@ export function PreparationScreen() {
                         <View key={item.id} style={index > 0 ? { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth } : undefined}>
                           <PreparationItemRow
                             item={item}
-                            pending={pendingItemIds.has(item.id)}
-                            onToggle={() => void toggleItem(item)}
-                            onOpenActions={() => openItemActions(item)}
+                            actionsActive={actionsItemId === item.id}
+                            onToggle={togglePreparationItem}
+                            onOpenActions={openItemActions}
+                            onEdit={editItemFromActions}
+                            onDelete={requestDelete}
+                            onCancelActions={closeItemActions}
                           />
                         </View>
                       ))}
@@ -315,15 +324,9 @@ export function PreparationScreen() {
             </Pressable>
           </View>
         ) : null}
+        </Pressable>
       </ScreenContainer>
 
-      <PreparationItemActionsModal
-        item={actionsItem}
-        onClose={() => setActionsItem(null)}
-        onEdit={() => openFormFromActions('edit')}
-        onChangeCategory={() => openFormFromActions('category')}
-        onDelete={requestDelete}
-      />
       {formState ? (
         <PreparationItemFormModal
           visible

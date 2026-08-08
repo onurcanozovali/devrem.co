@@ -36,12 +36,11 @@ interface PreparationContextValue {
   state: PreparationState | null;
   error: string | null;
   actionError: string | null;
-  pendingItemIds: ReadonlySet<string>;
   startPreparation: () => Promise<void>;
   retryPreparation: () => Promise<void>;
   addItem: (input: PreparationItemInput) => Promise<void>;
   editItem: (item: PreparationItem, input: PreparationItemInput) => Promise<void>;
-  toggleItem: (item: PreparationItem) => Promise<void>;
+  toggleItem: (itemId: string) => Promise<void>;
   deleteItem: (item: PreparationItem) => Promise<void>;
   restoreDefaults: () => Promise<number>;
   dismissHint: () => Promise<void>;
@@ -50,6 +49,26 @@ interface PreparationContextValue {
 
 export const PreparationContext = createContext<PreparationContextValue | null>(null);
 
+function datesEqual(left: Date | null, right: Date | null) {
+  return left?.getTime() === right?.getTime();
+}
+
+function itemsEqual(left: PreparationItem, right: PreparationItem) {
+  return left.id === right.id
+    && left.title === right.title
+    && left.category === right.category
+    && left.completed === right.completed
+    && left.source === right.source
+    && left.sortOrder === right.sortOrder
+    && left.priority === right.priority
+    && left.helper === right.helper
+    && left.templateKey === right.templateKey
+    && left.templateVersion === right.templateVersion
+    && datesEqual(left.createdAt, right.createdAt)
+    && datesEqual(left.updatedAt, right.updatedAt)
+    && datesEqual(left.completedAt, right.completedAt);
+}
+
 export function PreparationProvider({ children }: PropsWithChildren) {
   const { status: authStatus, session } = useAuth();
   const [status, setStatus] = useState<PreparationStatus>('idle');
@@ -57,9 +76,10 @@ export function PreparationProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<PreparationState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [pendingItemIds, setPendingItemIds] = useState<ReadonlySet<string>>(new Set());
   const itemsRef = useRef<PreparationItem[]>([]);
   const pendingItemIdsRef = useRef<Set<string>>(new Set());
+  const optimisticTogglesRef = useRef(new Map<string, Pick<PreparationItem, 'completed' | 'completedAt'>>());
+  const pendingDeletesRef = useRef(new Map<string, PreparationItem>());
   const loadPromiseRef = useRef<Promise<void> | null>(null);
   const activeUidRef = useRef<string | null>(null);
   const subscriptionsRef = useRef<Unsubscribe[]>([]);
@@ -67,6 +87,16 @@ export function PreparationProvider({ children }: PropsWithChildren) {
   const replaceItems = useCallback((nextItems: PreparationItem[]) => {
     itemsRef.current = nextItems;
     setItems(nextItems);
+  }, []);
+
+  const mergeOptimisticItems = useCallback((nextItems: PreparationItem[]) => {
+    const previousItems = new Map(itemsRef.current.map((item) => [item.id, item]));
+    return nextItems.filter((item) => !pendingDeletesRef.current.has(item.id)).map((item) => {
+      const optimisticToggle = optimisticTogglesRef.current.get(item.id);
+      const nextItem = optimisticToggle ? { ...item, ...optimisticToggle } : item;
+      const previousItem = previousItems.get(item.id);
+      return previousItem && itemsEqual(previousItem, nextItem) ? previousItem : nextItem;
+    });
   }, []);
 
   const stopSubscriptions = useCallback(() => {
@@ -103,7 +133,7 @@ export function PreparationProvider({ children }: PropsWithChildren) {
         subscribeToPreparationItems(uid, (nextItems) => {
           if (activeUidRef.current !== uid) return;
           receivedItems = true;
-          replaceItems(nextItems);
+          replaceItems(mergeOptimisticItems(nextItems));
           if (nextItems.length > 0 || receivedState) {
             setError(null);
             setStatus('ready');
@@ -148,7 +178,7 @@ export function PreparationProvider({ children }: PropsWithChildren) {
     } finally {
       if (loadPromiseRef.current === loadPromise) loadPromiseRef.current = null;
     }
-  }, [authStatus, replaceItems, session, stopSubscriptions]);
+  }, [authStatus, mergeOptimisticItems, replaceItems, session, stopSubscriptions]);
 
   const startPreparation = useCallback(() => loadPreparation(false), [loadPreparation]);
   const retryPreparation = useCallback(() => loadPreparation(true), [loadPreparation]);
@@ -166,7 +196,8 @@ export function PreparationProvider({ children }: PropsWithChildren) {
       setError(null);
       setActionError(null);
       pendingItemIdsRef.current = new Set();
-      setPendingItemIds(new Set());
+      optimisticTogglesRef.current.clear();
+      pendingDeletesRef.current.clear();
     });
     return undefined;
   }, [authStatus, session, stopSubscriptions]);
@@ -208,42 +239,58 @@ export function PreparationProvider({ children }: PropsWithChildren) {
     });
   }, [requireUid, runAction]);
 
-  const toggleItem = useCallback(async (item: PreparationItem) => {
-    if (pendingItemIdsRef.current.has(item.id)) return;
+  const toggleItem = useCallback(async (itemId: string) => {
+    if (pendingItemIdsRef.current.has(itemId)) return;
     const uid = requireUid();
-    const completed = !item.completed;
+    const currentItem = itemsRef.current.find((candidate) => candidate.id === itemId);
+    if (!currentItem) return;
+    const completed = !currentItem.completed;
     const optimisticCompletedAt = completed ? new Date() : null;
 
-    pendingItemIdsRef.current = new Set(pendingItemIdsRef.current).add(item.id);
-    setPendingItemIds(pendingItemIdsRef.current);
-    replaceItems(itemsRef.current.map((candidate) => candidate.id === item.id
+    pendingItemIdsRef.current = new Set(pendingItemIdsRef.current).add(itemId);
+    optimisticTogglesRef.current.set(itemId, { completed, completedAt: optimisticCompletedAt });
+    replaceItems(itemsRef.current.map((candidate) => candidate.id === itemId
       ? { ...candidate, completed, completedAt: optimisticCompletedAt }
       : candidate));
 
     try {
       await runAction(async () => {
-        await togglePreparationItem(uid, item.id, completed);
+        await togglePreparationItem(uid, itemId, completed);
       });
     } catch {
+      optimisticTogglesRef.current.delete(itemId);
       replaceItems(itemsRef.current.map((candidate) => (
-        candidate.id === item.id && candidate.completed === completed
-          ? { ...candidate, completed: item.completed, completedAt: item.completedAt }
+        candidate.id === itemId && candidate.completed === completed
+          ? { ...candidate, completed: currentItem.completed, completedAt: currentItem.completedAt }
           : candidate
       )));
     } finally {
+      optimisticTogglesRef.current.delete(itemId);
       const next = new Set(pendingItemIdsRef.current);
-      next.delete(item.id);
+      next.delete(itemId);
       pendingItemIdsRef.current = next;
-      setPendingItemIds(next);
     }
   }, [replaceItems, requireUid, runAction]);
 
   const deleteItem = useCallback(async (item: PreparationItem) => {
     const uid = requireUid();
-    await runAction(async () => {
-      await removePreparationItem(uid, item.id);
-    });
-  }, [requireUid, runAction]);
+    pendingDeletesRef.current.set(item.id, item);
+    replaceItems(itemsRef.current.filter((candidate) => candidate.id !== item.id));
+    try {
+      await runAction(async () => {
+        await removePreparationItem(uid, item.id);
+      });
+    } catch (caughtError) {
+      if (!itemsRef.current.some((candidate) => candidate.id === item.id)) {
+        replaceItems([...itemsRef.current, item].sort((left, right) => (
+          left.sortOrder - right.sortOrder || left.id.localeCompare(right.id)
+        )));
+      }
+      throw caughtError;
+    } finally {
+      pendingDeletesRef.current.delete(item.id);
+    }
+  }, [replaceItems, requireUid, runAction]);
 
   const restoreDefaults = useCallback(async (): Promise<number> => {
     const uid = requireUid();
@@ -278,7 +325,6 @@ export function PreparationProvider({ children }: PropsWithChildren) {
     state,
     error,
     actionError,
-    pendingItemIds,
     startPreparation,
     retryPreparation,
     addItem,
@@ -297,7 +343,6 @@ export function PreparationProvider({ children }: PropsWithChildren) {
     editItem,
     error,
     items,
-    pendingItemIds,
     restoreDefaults,
     retryPreparation,
     startPreparation,
