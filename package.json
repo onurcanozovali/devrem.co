@@ -8,6 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "test:home": "tsx --test src/features/home/services/homeDomain.test.ts",
     "test:preparation": "tsx --test src/features/preparation/services/preparationDomain.test.ts",
     "test:profile": "tsx --test src/features/profile/services/profileDomain.test.ts",
     "typecheck": "tsc --noEmit",
