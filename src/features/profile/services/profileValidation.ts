@@ -123,3 +123,20 @@ export function isReportingDateConsistent(
     referenceDate,
   );
 }
+
+export function isReportingDateOnOrAfterPeriodStart(
+  reportingDate: unknown,
+  militaryPeriodYear: unknown,
+  militaryPeriodMonth: unknown,
+): boolean {
+  if (
+    !isValidStoredDate(reportingDate)
+    || typeof militaryPeriodYear !== 'number'
+    || typeof militaryPeriodMonth !== 'number'
+    || !isValidMilitaryPeriod(militaryPeriodYear, militaryPeriodMonth)
+  ) return false;
+
+  const selectedDate = storedDateToLocalDate(reportingDate);
+  if (!selectedDate) return false;
+  return selectedDate >= new Date(militaryPeriodYear, militaryPeriodMonth - 1, 1);
+}

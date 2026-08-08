@@ -5,8 +5,13 @@ import test from 'node:test';
 
 import { turkeyProvinces } from '@/data/turkeyProvinces';
 import { createMilitaryMonthOptions, createMilitaryYearOptions } from '../profileOptions';
-import type { CompleteUserProfileInput } from '../types/profile';
-import { parseCompletedProfileData, serializeCompletedProfileData } from './profileSerialization';
+import type { CompleteUserProfileInput, UserProfile } from '../types/profile';
+import { createProfileFormValues, isProfileFormDirty, validateProfileForm } from './profileForm';
+import {
+  parseCompletedProfileData,
+  serializeCompletedProfileData,
+  serializeUpdatedProfileData,
+} from './profileSerialization';
 import {
   getMinimumReportingDate,
   isMilitaryPeriodCurrentOrFuture,
@@ -31,6 +36,19 @@ const validInput: CompleteUserProfileInput = {
   reportingDate: '2026-08-08',
 };
 
+const historicalProfile: UserProfile = {
+  ...validInput,
+  uid: 'user-1',
+  firstName: 'Onur Can',
+  lastName: 'Özovalı',
+  militaryPeriodYear: 2025,
+  militaryPeriodMonth: 7,
+  reportingDate: '2025-07-10',
+  onboardingCompleted: true,
+  createdAt: null,
+  updatedAt: null,
+};
+
 test('controlled province data contains all 81 unique plate codes', () => {
   assert.equal(turkeyProvinces.length, 81);
   assert.equal(new Set(turkeyProvinces.map(({ code }) => code)).size, 81);
@@ -53,6 +71,88 @@ test('new onboarding never offers a past military period', () => {
   assert.equal(isMilitaryPeriodCurrentOrFuture(2026, 7, referenceDate), false);
   assert.equal(isMilitaryPeriodCurrentOrFuture(2026, 8, referenceDate), true);
   assert.equal(isMilitaryPeriodCurrentOrFuture(2027, 1, referenceDate), true);
+});
+
+test('edit options retain only the stored historical period alongside current choices', () => {
+  assert.deepEqual(
+    createMilitaryYearOptions(referenceDate, 2025).map(({ value }) => value),
+    [2025, 2026, 2027, 2028, 2029, 2030, 2031],
+  );
+  assert.deepEqual(
+    createMilitaryMonthOptions(2025, referenceDate, { year: 2025, month: 7 }).map(({ value }) => value),
+    [7],
+  );
+});
+
+test('editing unrelated fields preserves an unchanged historical period and reporting date', () => {
+  const values = createProfileFormValues(historicalProfile);
+  values.firstName = '  Yeni   Ad  ';
+  const result = validateProfileForm(values, {
+    mode: 'edit',
+    existingProfile: historicalProfile,
+    referenceDate,
+  });
+  assert.deepEqual(result.errors, {});
+  assert.equal(result.input?.firstName, 'Yeni Ad');
+  assert.equal(result.input?.militaryPeriodYear, 2025);
+  assert.equal(result.input?.reportingDate, '2025-07-10');
+});
+
+test('editing a historical profile cannot select another past period', () => {
+  const values = createProfileFormValues(historicalProfile);
+  values.militaryMonth = 8;
+  values.reportingDate = '2025-08-01';
+  const result = validateProfileForm(values, {
+    mode: 'edit',
+    existingProfile: historicalProfile,
+    referenceDate,
+  });
+  assert.equal(result.input, null);
+  assert.equal(result.errors.militaryMonth, 'Geçmiş bir celp dönemi seçilemez.');
+});
+
+test('update serializer preserves an unchanged historical period and enforces profile ownership', () => {
+  const serialized = serializeUpdatedProfileData('user-1', {
+    ...historicalProfile,
+    firstName: '  Yeni   Ad  ',
+  }, historicalProfile, referenceDate);
+  assert.equal(serialized?.firstName, 'Yeni Ad');
+  assert.equal(serialized?.militaryPeriodYear, 2025);
+  assert.equal(serialized?.militaryPeriodMonth, 7);
+  assert.equal(serializeUpdatedProfileData('user-2', historicalProfile, historicalProfile, referenceDate), null);
+});
+
+test('update serializer rejects changing a historical profile to another past period', () => {
+  assert.equal(serializeUpdatedProfileData('user-1', {
+    ...historicalProfile,
+    militaryPeriodMonth: 8,
+    reportingDate: '2025-08-10',
+  }, historicalProfile, referenceDate), null);
+});
+
+test('editing only a historical reporting date validates against its stored period', () => {
+  const values = createProfileFormValues(historicalProfile);
+  values.reportingDate = '2025-07-20';
+  assert.ok(validateProfileForm(values, {
+    mode: 'edit',
+    existingProfile: historicalProfile,
+    referenceDate,
+  }).input);
+
+  values.reportingDate = '2025-06-30';
+  assert.equal(validateProfileForm(values, {
+    mode: 'edit',
+    existingProfile: historicalProfile,
+    referenceDate,
+  }).errors.reportingDate, 'Teslim tarihi mevcut celp döneminden önce olamaz.');
+});
+
+test('dirty tracking compares normalized persisted values', () => {
+  const values = createProfileFormValues(historicalProfile);
+  values.firstName = `  ${historicalProfile.firstName}  `;
+  assert.equal(isProfileFormDirty(values, historicalProfile), false);
+  values.departureCity = 35;
+  assert.equal(isProfileFormDirty(values, historicalProfile), true);
 });
 
 test('reporting dates use local calendar parts and respect today and celp period', () => {

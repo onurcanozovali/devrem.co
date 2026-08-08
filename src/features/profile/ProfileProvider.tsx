@@ -1,7 +1,7 @@
 import { createContext, type PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { fetchUserProfile, saveCompletedUserProfile } from '@/services/firebase';
+import { fetchUserProfile, saveCompletedUserProfile, updateUserProfile } from '@/services/firebase';
 import { mapProfileError, ProfileFlowError } from './services/profileErrors';
 import type { CompleteUserProfileInput, ProfileStatus, UserProfile } from './types/profile';
 
@@ -11,6 +11,7 @@ interface ProfileContextValue {
   error: string | null;
   refreshProfile: () => Promise<void>;
   completeOnboarding: (input: CompleteUserProfileInput) => Promise<void>;
+  updateProfile: (input: CompleteUserProfileInput) => Promise<void>;
 }
 
 export const ProfileContext = createContext<ProfileContextValue | null>(null);
@@ -71,6 +72,21 @@ export function ProfileProvider({ children }: PropsWithChildren) {
     }
   }, [authStatus, session]);
 
+  const updateProfile = useCallback(async (input: CompleteUserProfileInput) => {
+    if (authStatus !== 'authenticated' || !session) {
+      throw new ProfileFlowError('permission-denied');
+    }
+
+    try {
+      const savedProfile = await updateUserProfile(session.userId, input);
+      setProfile(savedProfile);
+      setError(null);
+      setStatus('complete');
+    } catch (caughtError: unknown) {
+      throw mapProfileError(caughtError);
+    }
+  }, [authStatus, session]);
+
   const value = useMemo<ProfileContextValue>(
     () => ({
       status: authStatus === 'authenticated' ? status : 'idle',
@@ -78,8 +94,9 @@ export function ProfileProvider({ children }: PropsWithChildren) {
       error: authStatus === 'authenticated' ? error : null,
       refreshProfile,
       completeOnboarding,
+      updateProfile,
     }),
-    [authStatus, completeOnboarding, error, profile, refreshProfile, status],
+    [authStatus, completeOnboarding, error, profile, refreshProfile, status, updateProfile],
   );
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
