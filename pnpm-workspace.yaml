@@ -1,5 +1,6 @@
 packages:
   - "."
+  - "functions"
 minimumReleaseAge: 1440
 overrides:
   '@types/node': 26.1.2

@@ -13,7 +13,9 @@ import {
   militaryTypes,
   type CompleteUserProfileInput,
   type MilitaryType,
+  type UserProfile,
 } from '../types/profile';
+import { createProfileFormValues, validateProfileForm } from './profileForm';
 
 interface LegacyMilitaryPeriod {
   year: number;
@@ -136,6 +138,32 @@ export function serializeCompletedProfileData(
     militaryPeriodMonth: input.militaryPeriodMonth,
     militaryUnit: input.militaryUnit === null ? null : normalizeWhitespace(input.militaryUnit),
     reportingDate: input.reportingDate,
+    onboardingCompleted: true,
+  };
+}
+
+export function serializeUpdatedProfileData(
+  uid: string,
+  input: CompleteUserProfileInput,
+  existingProfile: UserProfile,
+  referenceDate = new Date(),
+): SerializedProfileData | null {
+  if (!uid || uid !== existingProfile.uid) return null;
+
+  const candidateProfile: UserProfile = {
+    ...existingProfile,
+    ...input,
+  };
+  const result = validateProfileForm(createProfileFormValues(candidateProfile), {
+    mode: 'edit',
+    existingProfile,
+    referenceDate,
+  });
+  if (!result.input) return null;
+
+  return {
+    uid,
+    ...result.input,
     onboardingCompleted: true,
   };
 }

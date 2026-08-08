@@ -2,7 +2,11 @@ import type { ConfirmationResult } from '@react-native-firebase/auth';
 import { createContext, type PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  confirmAccountDeletionReauthentication,
   confirmPhoneVerification,
+  deleteCurrentAccount,
+  getCurrentUserPhoneNumber,
+  requestAccountDeletionReauthentication,
   requestPhoneVerification,
   signOutCurrentUser,
   subscribeToAuthState,
@@ -19,6 +23,11 @@ interface AuthContextValue {
   verifyCode: (code: string) => Promise<void>;
   clearVerification: () => void;
   logout: () => Promise<void>;
+  accountPhoneNumber: string | null;
+  deleteAccount: () => Promise<void>;
+  sendAccountDeletionCode: () => Promise<void>;
+  confirmAccountDeletionCode: (code: string) => Promise<void>;
+  clearAccountDeletionVerification: () => void;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -29,7 +38,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [pendingPhoneNumber, setPendingPhoneNumber] = useState<string | null>(null);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const confirmationRef = useRef<ConfirmationResult | null>(null);
+  const accountDeletionVerificationIdRef = useRef<string | null>(null);
   const smsRequestRef = useRef<Promise<void> | null>(null);
+  const accountDeletionSmsRequestRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     try {
@@ -80,7 +91,38 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const logout = useCallback(async () => {
     await signOutCurrentUser();
     clearVerification();
+    accountDeletionVerificationIdRef.current = null;
   }, [clearVerification]);
+
+  const clearAccountDeletionVerification = useCallback(() => {
+    accountDeletionVerificationIdRef.current = null;
+  }, []);
+
+  const sendAccountDeletionCode = useCallback(async () => {
+    if (accountDeletionSmsRequestRef.current) return accountDeletionSmsRequestRef.current;
+    const request = (async () => {
+      accountDeletionVerificationIdRef.current = await requestAccountDeletionReauthentication();
+    })();
+    accountDeletionSmsRequestRef.current = request;
+    try {
+      await request;
+    } finally {
+      accountDeletionSmsRequestRef.current = null;
+    }
+  }, []);
+
+  const confirmAccountDeletionCode = useCallback(async (code: string) => {
+    const verificationId = accountDeletionVerificationIdRef.current;
+    if (!verificationId) throw new AuthFlowError('verification-session-expired');
+    await confirmAccountDeletionReauthentication(verificationId, code);
+    accountDeletionVerificationIdRef.current = null;
+  }, []);
+
+  const deleteAccount = useCallback(async () => {
+    await deleteCurrentAccount();
+    clearVerification();
+    clearAccountDeletionVerification();
+  }, [clearAccountDeletionVerification, clearVerification]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -92,8 +134,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
       verifyCode,
       clearVerification,
       logout,
+      accountPhoneNumber: session ? getCurrentUserPhoneNumber() : null,
+      deleteAccount,
+      sendAccountDeletionCode,
+      confirmAccountDeletionCode,
+      clearAccountDeletionVerification,
     }),
-    [clearVerification, initializationError, logout, pendingPhoneNumber, sendVerificationCode, session, status, verifyCode],
+    [clearAccountDeletionVerification, clearVerification, confirmAccountDeletionCode, deleteAccount, initializationError, logout, pendingPhoneNumber, sendAccountDeletionCode, sendVerificationCode, session, status, verifyCode],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

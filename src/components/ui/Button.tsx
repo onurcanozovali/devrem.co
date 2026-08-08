@@ -6,7 +6,7 @@ import { AppText } from './AppText';
 interface ButtonProps extends Omit<PressableProps, 'children'> {
   label: string;
   loading?: boolean;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'danger';
 }
 
 export function Button({ label, loading = false, variant = 'primary', disabled, style, ...props }: ButtonProps) {
@@ -24,7 +24,9 @@ export function Button({ label, loading = false, variant = 'primary', disabled, 
         {
           backgroundColor: variant === 'secondary'
             ? state.pressed ? colors.surfaceSubtle : colors.surface
-            : state.pressed ? colors.primaryPressed : colors.primary,
+            : variant === 'danger'
+              ? colors.danger
+              : state.pressed ? colors.primaryPressed : colors.primary,
           borderColor: variant === 'secondary' ? colors.border : 'transparent',
           borderRadius: radii.md,
           borderWidth: 1,

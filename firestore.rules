@@ -67,15 +67,11 @@ service cloud.firestore {
         && data.militaryCity <= 81
         && data.militaryType in ['standard', 'paid', 'reserveOfficer', 'reserveNco']
         && data.militaryPeriodYear is int
-        && data.militaryPeriodYear >= request.time.year()
+        && data.militaryPeriodYear >= 2000
         && data.militaryPeriodYear <= request.time.year() + 5
         && data.militaryPeriodMonth is int
         && data.militaryPeriodMonth >= 1
         && data.militaryPeriodMonth <= 12
-        && (
-          data.militaryPeriodYear > request.time.year()
-          || data.militaryPeriodMonth >= request.time.month()
-        )
         && (
           data.militaryUnit == null
           || (
@@ -89,6 +85,20 @@ service cloud.firestore {
         && data.onboardingCompleted == true
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function hasCurrentOrFutureProfilePeriod() {
+      let data = request.resource.data;
+      return data.militaryPeriodYear > request.time.year()
+        || (
+          data.militaryPeriodYear == request.time.year()
+          && data.militaryPeriodMonth >= request.time.month()
+        );
+    }
+
+    function keepsExistingHistoricalProfilePeriod() {
+      return request.resource.data.militaryPeriodYear == resource.data.militaryPeriodYear
+        && request.resource.data.militaryPeriodMonth == resource.data.militaryPeriodMonth;
     }
 
     function hasValidPreparationItemShape(itemId) {
@@ -192,11 +202,16 @@ service cloud.firestore {
 
       allow create: if isOwnProfile(uid)
         && hasValidProfileShape(uid)
+        && hasCurrentOrFutureProfilePeriod()
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
 
       allow update: if isOwnProfile(uid)
         && hasValidProfileShape(uid)
+        && (
+          hasCurrentOrFutureProfilePeriod()
+          || keepsExistingHistoricalProfilePeriod()
+        )
         && resource.data.uid == uid
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;

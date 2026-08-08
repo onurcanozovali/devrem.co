@@ -9,12 +9,13 @@ import { Card } from '@/components/ui/Card';
 import { DatePickerField } from '@/components/ui/DatePickerField';
 import { SelectField } from '@/components/ui/SelectField';
 import { TextField } from '@/components/ui/TextField';
-import { turkeyProvinces, type ProvinceCode } from '@/data/turkeyProvinces';
+import type { ProvinceCode } from '@/data/turkeyProvinces';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import {
   createMilitaryMonthOptions,
   createMilitaryYearOptions,
   militaryTypeOptions,
+  provinceOptions,
 } from '@/features/profile/profileOptions';
 import { ProfileFlowError, mapProfileError } from '@/features/profile/services/profileErrors';
 import {
@@ -39,8 +40,6 @@ const steps = [
   { title: 'Askerlik Bilgileri', description: 'Askerlik türünü ve yaklaşan celp dönemini belirt.' },
   { title: 'Birlik ve Teslim', description: 'Bildiğin birlik bilgisini ve teslim tarihini ekle.' },
 ] as const;
-
-const provinceOptions = turkeyProvinces.map(({ code, name }) => ({ value: code, label: name }));
 
 type FieldName =
   | 'firstName'
