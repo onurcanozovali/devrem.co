@@ -24,7 +24,7 @@ function PublicProfileContent({ profile }: { profile: PublicProfile }) {
     ['Gideceği şehir', getProvinceName(profile.militaryCity)],
     ['Askerlik dönemi', getMilitaryPeriodLabel(profile.militaryPeriodYear, profile.militaryPeriodMonth)],
     ['Askerlik türü', militaryTypeLabels[profile.militaryType]],
-    ['Birlik', profile.militaryUnit ?? 'Henüz belli değil'],
+    ['Birlik', profile.militaryUnitName ?? 'Henüz belli değil'],
     ['Yola çıkacağı şehir', getProvinceName(profile.departureCity)],
   ] as const;
 

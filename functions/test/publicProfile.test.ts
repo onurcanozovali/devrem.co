@@ -34,7 +34,8 @@ test('trusted projection contains only discovery-safe normalized fields', () => 
     militaryPeriodYear: 2027,
     militaryPeriodMonth: 2,
     militaryType: 'standard',
-    militaryUnit: '1. Piyade Tugayı',
+    militaryUnitId: null,
+    militaryUnitName: '1. Piyade Tugayı',
     photoPath: 'users/user-1/profile/avatar.jpg',
   });
   assert.equal('lastName' in (projection ?? {}), false);
@@ -45,6 +46,8 @@ test('trusted projection contains only discovery-safe normalized fields', () => 
 test('incomplete or invalid private profiles are not projected', () => {
   assert.equal(createPublicProfileProjection('user-1', { ...privateProfile, onboardingCompleted: false }), null);
   assert.equal(createPublicProfileProjection('user-1', { ...privateProfile, residenceCity: 0 }), null);
+  assert.equal(createPublicProfileProjection('user-1', { ...privateProfile, militaryType: null }), null);
+  assert.equal(createPublicProfileProjection('user-1', { ...privateProfile, militaryType: 'Bedelli' }), null);
   assert.equal(createPublicProfileProjection('user-1', {
     ...privateProfile,
     photoPath: 'users/user-2/profile/avatar.jpg',

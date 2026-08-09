@@ -26,13 +26,21 @@ function parsePublicProfileSnapshot(
 
 export async function fetchPublicProfiles(reference: DiscoveryQuery): Promise<PublicProfile[]> {
   const database = getFirestore(getFirebaseApp());
-  const snapshot = await getDocs(query(
-    collection(database, 'publicProfiles'),
+  const publicProfiles = collection(database, 'publicProfiles');
+  const baseConstraints = [
     where('militaryPeriodYear', '==', reference.militaryPeriodYear),
     where('militaryPeriodMonth', '==', reference.militaryPeriodMonth),
     where('militaryCity', '==', reference.militaryCity),
-    limit(discoveryPageSize),
-  ));
+    where('militaryType', '==', reference.militaryType),
+  ];
+  const snapshot = await getDocs(reference.militaryUnitId
+    ? query(
+      publicProfiles,
+      ...baseConstraints,
+      where('militaryUnitId', '==', reference.militaryUnitId),
+      limit(discoveryPageSize),
+    )
+    : query(publicProfiles, ...baseConstraints, limit(discoveryPageSize)));
   return snapshot.docs.flatMap((documentSnapshot) => {
     const profile = parsePublicProfileSnapshot(documentSnapshot.id, documentSnapshot.data());
     return profile ? [profile] : [];

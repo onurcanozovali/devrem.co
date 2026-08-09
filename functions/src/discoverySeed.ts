@@ -18,14 +18,19 @@ export interface DiscoverySeedContext {
   militaryCity: number;
   militaryPeriodYear: number;
   militaryPeriodMonth: number;
-  militaryUnit: string;
+  militaryType: PublicProfileProjection['militaryType'];
+  militaryUnitName: string;
 }
+
+type DiscoverySeedPublicProfile = Omit<PublicProfileProjection, 'militaryType'> & {
+  militaryType: PublicProfileProjection['militaryType'] | null;
+};
 
 interface DiscoverySeedProfile {
   id: string;
-  group: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
+  group: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H';
   hasAvatar: boolean;
-  profile: PublicProfileProjection;
+  profile: DiscoverySeedPublicProfile;
 }
 
 const markerPath = '_developmentSeeds/discovery';
@@ -36,8 +41,13 @@ const fallbackContext: DiscoverySeedContext = {
   militaryCity: 43,
   militaryPeriodYear: 2027,
   militaryPeriodMonth: 2,
-  militaryUnit: '1. Piyade Tugayı',
+  militaryType: 'standard',
+  militaryUnitName: '1. Piyade Tugayı',
 };
+
+function normalizeWhitespace(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
+}
 
 function otherProvince(...excluded: number[]): number {
   for (let province = 1; province <= 81; province += 1) {
@@ -48,6 +58,12 @@ function otherProvince(...excluded: number[]): number {
 
 function nextPeriod(year: number, month: number): { year: number; month: number } {
   return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+}
+
+function differentMilitaryType(
+  militaryType: PublicProfileProjection['militaryType'],
+): PublicProfileProjection['militaryType'] {
+  return militaryType === 'paid' ? 'standard' : 'paid';
 }
 
 export function buildDiscoverySeedProfiles(context: DiscoverySeedContext): DiscoverySeedProfile[] {
@@ -61,15 +77,16 @@ export function buildDiscoverySeedProfiles(context: DiscoverySeedContext): Disco
     militaryCity: context.militaryCity,
     militaryPeriodYear: context.militaryPeriodYear,
     militaryPeriodMonth: context.militaryPeriodMonth,
-    militaryType: 'standard' as const,
-    militaryUnit: null,
+    militaryType: context.militaryType,
+    militaryUnitId: null,
+    militaryUnitName: null,
     photoPath: null,
   };
   const create = (
     id: string,
     group: DiscoverySeedProfile['group'],
     firstName: string,
-    overrides: Partial<PublicProfileProjection>,
+    overrides: Partial<DiscoverySeedPublicProfile>,
     hasAvatar = false,
   ): DiscoverySeedProfile => ({
     id,
@@ -84,21 +101,28 @@ export function buildDiscoverySeedProfiles(context: DiscoverySeedContext): Disco
   });
 
   return [
-    create(`${fakeIdPrefix}a1`, 'A', 'Deneme Alp', { departureCity: context.departureCity, militaryUnit: context.militaryUnit }, true),
-    create(`${fakeIdPrefix}a2`, 'A', 'Deneme Bora', { departureCity: context.departureCity, militaryUnit: context.militaryUnit }, true),
-    create(`${fakeIdPrefix}a3`, 'A', 'Deneme Cem', { departureCity: context.departureCity, militaryUnit: context.militaryUnit }),
-    create(`${fakeIdPrefix}b1`, 'B', 'Deneme Doruk', { departureCity: context.departureCity }, true),
-    create(`${fakeIdPrefix}b2`, 'B', 'Deneme Efe', { departureCity: context.departureCity, militaryUnit: 'Farklı Deneme Birliği' }),
-    create(`${fakeIdPrefix}c1`, 'C', 'Deneme Fırat', { residenceCity: context.residenceCity }, true),
-    create(`${fakeIdPrefix}c2`, 'C', 'Deneme Gürkan', { residenceCity: context.residenceCity }),
-    create(`${fakeIdPrefix}d1`, 'D', 'Deneme Hakan', {}),
-    create(`${fakeIdPrefix}d2`, 'D', 'Deneme İlker', {}),
-    create(`${fakeIdPrefix}e1`, 'E', 'Deneme Kaan', { militaryCity: otherDestination }),
-    create(`${fakeIdPrefix}f1`, 'F', 'Deneme Levent', {
+    create(`${fakeIdPrefix}a1`, 'A', 'Deneme Alp', { militaryUnitName: context.militaryUnitName }, true),
+    create(`${fakeIdPrefix}a2`, 'A', 'Deneme Bora', { militaryUnitName: context.militaryUnitName }),
+    create(`${fakeIdPrefix}b1`, 'B', 'Deneme Cem', {
+      militaryType: differentMilitaryType(context.militaryType),
+      militaryUnitName: context.militaryUnitName,
+    }),
+    create(`${fakeIdPrefix}c1`, 'C', 'Deneme Doruk', { militaryUnitName: 'Farklı Deneme Birliği' }, true),
+    create(`${fakeIdPrefix}c2`, 'C', 'Deneme Efe', { militaryUnitName: 'Başka Deneme Birliği' }),
+    create(`${fakeIdPrefix}d1`, 'D', 'Deneme Fırat', {
+      militaryCity: otherDestination,
+      militaryUnitName: context.militaryUnitName,
+    }),
+    create(`${fakeIdPrefix}e1`, 'E', 'Deneme Gürkan', {
       militaryPeriodYear: differentPeriod.year,
       militaryPeriodMonth: differentPeriod.month,
+      militaryUnitName: context.militaryUnitName,
     }),
-    create(`${fakeIdPrefix}g1`, 'G', 'Deneme Mert', { militaryType: 'paid' }),
+    create(`${fakeIdPrefix}f1`, 'F', 'Deneme Hakan', { departureCity: context.departureCity, militaryUnitName: context.militaryUnitName }, true),
+    create(`${fakeIdPrefix}f2`, 'F', 'Deneme İlker', { departureCity: context.departureCity, militaryUnitName: context.militaryUnitName }),
+    create(`${fakeIdPrefix}g1`, 'G', 'Deneme Kaan', { residenceCity: context.residenceCity, militaryUnitName: context.militaryUnitName }, true),
+    create(`${fakeIdPrefix}g2`, 'G', 'Deneme Levent', { residenceCity: context.residenceCity, militaryUnitName: context.militaryUnitName }),
+    create(`${fakeIdPrefix}h1`, 'H', 'Deneme Mert', { militaryType: null, militaryUnitName: context.militaryUnitName }),
   ];
 }
 
@@ -106,14 +130,15 @@ export async function resolveDiscoverySeedContext(database: Firestore): Promise<
   const snapshot = await database.collection('users').orderBy('updatedAt', 'desc').limit(20).get();
   for (const documentSnapshot of snapshot.docs) {
     const projection = createPublicProfileProjection(documentSnapshot.id, documentSnapshot.data());
-    if (projection?.militaryUnit) {
+    if (projection?.militaryUnitName) {
       return {
         residenceCity: projection.residenceCity,
         departureCity: projection.departureCity,
         militaryCity: projection.militaryCity,
         militaryPeriodYear: projection.militaryPeriodYear,
         militaryPeriodMonth: projection.militaryPeriodMonth,
-        militaryUnit: projection.militaryUnit,
+        militaryType: projection.militaryType,
+        militaryUnitName: projection.militaryUnitName,
       };
     }
   }
@@ -240,13 +265,24 @@ export async function verifyDiscoveryQuery(database: Firestore): Promise<number>
     .where('militaryPeriodYear', '==', context.militaryPeriodYear)
     .where('militaryPeriodMonth', '==', context.militaryPeriodMonth)
     .where('militaryCity', '==', context.militaryCity)
+    .where('militaryType', '==', context.militaryType)
     .limit(40)
     .get();
-  const eligibleSeedCount = snapshot.docs.filter(({ id }) => seededIds.has(id)).length;
-  if (eligibleSeedCount !== 10) {
-    throw new Error(`Expected the discovery query to return 10 seeded candidates but found ${eligibleSeedCount}.`);
+  const candidateSeedCount = snapshot.docs.filter(({ id }) => seededIds.has(id)).length;
+  if (candidateSeedCount !== 8) {
+    throw new Error(`Expected the base identity query to return 8 seeded candidates but found ${candidateSeedCount}.`);
   }
-  return eligibleSeedCount;
+  const temporaryUnitKey = normalizeWhitespace(context.militaryUnitName).toLocaleLowerCase('tr-TR');
+  const exactDevreSeedCount = snapshot.docs.filter((documentSnapshot) => (
+    seededIds.has(documentSnapshot.id)
+    && documentSnapshot.get('militaryUnitId') === null
+    && typeof documentSnapshot.get('militaryUnitName') === 'string'
+    && normalizeWhitespace(documentSnapshot.get('militaryUnitName')).toLocaleLowerCase('tr-TR') === temporaryUnitKey
+  )).length;
+  if (exactDevreSeedCount !== 6) {
+    throw new Error(`Expected exact-unit filtering to retain 6 seeded devre profiles but found ${exactDevreSeedCount}.`);
+  }
+  return candidateSeedCount;
 }
 
 export async function clearDiscoveryProfiles(database: Firestore, bucket: SeedBucket): Promise<number> {

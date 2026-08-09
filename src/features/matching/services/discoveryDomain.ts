@@ -22,6 +22,20 @@ const publicProfileFields = [
   'militaryPeriodYear',
   'militaryPeriodMonth',
   'militaryType',
+  'militaryUnitId',
+  'militaryUnitName',
+  'photoPath',
+  'updatedAt',
+] as const;
+
+const legacyPublicProfileFields = [
+  'firstName',
+  'residenceCity',
+  'departureCity',
+  'militaryCity',
+  'militaryPeriodYear',
+  'militaryPeriodMonth',
+  'militaryType',
   'militaryUnit',
   'photoPath',
   'updatedAt',
@@ -31,9 +45,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function hasOnlyPublicProfileFields(value: Record<string, unknown>): boolean {
-  const allowed = new Set<string>(publicProfileFields);
-  return Object.keys(value).length === publicProfileFields.length
+function hasOnlyFields(value: Record<string, unknown>, fields: readonly string[]): boolean {
+  const allowed = new Set<string>(fields);
+  return Object.keys(value).length === fields.length
     && Object.keys(value).every((key) => allowed.has(key));
 }
 
@@ -42,7 +56,12 @@ function isMilitaryType(value: unknown): value is MilitaryType {
 }
 
 export function parsePublicProfileData(userId: string, value: unknown): PublicProfile | null {
-  if (!userId || !isRecord(value) || !hasOnlyPublicProfileFields(value)) return null;
+  if (!userId || !isRecord(value)) return null;
+  const isCurrentShape = hasOnlyFields(value, publicProfileFields);
+  const isLegacyShape = hasOnlyFields(value, legacyPublicProfileFields);
+  if (!isCurrentShape && !isLegacyShape) return null;
+  const militaryUnitId = isCurrentShape ? value.militaryUnitId : null;
+  const militaryUnitName = isCurrentShape ? value.militaryUnitName : value.militaryUnit;
   if (
     !isValidName(value.firstName)
     || !isProvinceCode(value.residenceCity)
@@ -50,7 +69,8 @@ export function parsePublicProfileData(userId: string, value: unknown): PublicPr
     || !isProvinceCode(value.militaryCity)
     || !isValidMilitaryPeriod(value.militaryPeriodYear, value.militaryPeriodMonth)
     || !isMilitaryType(value.militaryType)
-    || !isValidOptionalMilitaryUnit(value.militaryUnit)
+    || !(militaryUnitId === null || (typeof militaryUnitId === 'string' && normalizeWhitespace(militaryUnitId).length > 0))
+    || !isValidOptionalMilitaryUnit(militaryUnitName)
     || !isValidProfilePhotoPath(userId, value.photoPath)
     || !(value.updatedAt instanceof Date)
   ) return null;
@@ -64,30 +84,51 @@ export function parsePublicProfileData(userId: string, value: unknown): PublicPr
     militaryPeriodYear: value.militaryPeriodYear as number,
     militaryPeriodMonth: value.militaryPeriodMonth as number,
     militaryType: value.militaryType,
-    militaryUnit: value.militaryUnit === null ? null : normalizeWhitespace(value.militaryUnit),
+    militaryUnitId: militaryUnitId === null ? null : normalizeWhitespace(militaryUnitId as string),
+    militaryUnitName: militaryUnitName === null ? null : normalizeWhitespace(militaryUnitName as string),
     photoPath: value.photoPath,
     updatedAt: value.updatedAt,
   };
 }
 
-function normalizeMilitaryUnit(value: string | null): string | null {
+function normalizeTemporaryMilitaryUnitName(value: string | null): string | null {
   return value ? normalizeWhitespace(value).toLocaleLowerCase('tr-TR') : null;
+}
+
+export function hasExactMilitaryUnitMatch(
+  reference: DiscoveryReferenceProfile,
+  candidate: PublicProfile,
+): boolean {
+  if (reference.militaryUnitId !== null || candidate.militaryUnitId !== null) {
+    return reference.militaryUnitId !== null
+      && candidate.militaryUnitId !== null
+      && reference.militaryUnitId === candidate.militaryUnitId;
+  }
+  const referenceUnit = normalizeTemporaryMilitaryUnitName(reference.militaryUnitName);
+  const candidateUnit = normalizeTemporaryMilitaryUnitName(candidate.militaryUnitName);
+  return referenceUnit !== null && candidateUnit !== null && referenceUnit === candidateUnit;
+}
+
+export function hasExactDevreMatch(
+  reference: DiscoveryReferenceProfile,
+  candidate: PublicProfile,
+): boolean {
+  return isMilitaryType(reference.militaryType)
+    && isMilitaryType(candidate.militaryType)
+    && candidate.militaryPeriodYear === reference.militaryPeriodYear
+    && candidate.militaryPeriodMonth === reference.militaryPeriodMonth
+    && candidate.militaryCity === reference.militaryCity
+    && candidate.militaryType === reference.militaryType
+    && hasExactMilitaryUnitMatch(reference, candidate);
 }
 
 export function getDiscoveryRelevanceScore(
   reference: DiscoveryReferenceProfile,
   candidate: PublicProfile,
 ): number {
-  if (
-    candidate.militaryPeriodYear !== reference.militaryPeriodYear
-    || candidate.militaryPeriodMonth !== reference.militaryPeriodMonth
-    || candidate.militaryCity !== reference.militaryCity
-  ) return -1;
+  if (!hasExactDevreMatch(reference, candidate)) return -1;
 
   let score = 0;
-  const referenceUnit = normalizeMilitaryUnit(reference.militaryUnit);
-  const candidateUnit = normalizeMilitaryUnit(candidate.militaryUnit);
-  if (referenceUnit && candidateUnit && referenceUnit === candidateUnit) score += 100;
   if (candidate.departureCity === reference.departureCity) score += 60;
   if (candidate.residenceCity === reference.residenceCity) score += 30;
   return score;
@@ -100,9 +141,7 @@ export function filterAndRankPublicProfiles(
   return candidates
     .filter((candidate) => (
       candidate.userId !== reference.userId
-      && candidate.militaryPeriodYear === reference.militaryPeriodYear
-      && candidate.militaryPeriodMonth === reference.militaryPeriodMonth
-      && candidate.militaryCity === reference.militaryCity
+      && hasExactDevreMatch(reference, candidate)
     ))
     .sort((left, right) => {
       const scoreDifference = getDiscoveryRelevanceScore(reference, right)
@@ -130,23 +169,26 @@ export function filterPublicProfilesBySegment(
   reference: DiscoveryReferenceProfile,
   segment: DiscoverySegment,
 ): PublicProfile[] {
+  const devreProfiles = profiles.filter((profile) => (
+    profile.userId !== reference.userId
+    && hasExactDevreMatch(reference, profile)
+  ));
   if (segment === 'residence') {
-    return profiles.filter(({ residenceCity }) => residenceCity === reference.residenceCity);
+    return devreProfiles.filter(({ residenceCity }) => residenceCity === reference.residenceCity);
   }
   if (segment === 'departure') {
-    return profiles.filter(({ departureCity }) => departureCity === reference.departureCity);
+    return devreProfiles.filter(({ departureCity }) => departureCity === reference.departureCity);
   }
-  return profiles;
+  return devreProfiles;
 }
 
 export function getMatchReasonBadges(
   reference: DiscoveryReferenceProfile,
   candidate: PublicProfile,
 ): string[] {
+  if (!hasExactDevreMatch(reference, candidate)) return [];
   const reasons: string[] = [];
-  const referenceUnit = normalizeMilitaryUnit(reference.militaryUnit);
-  const candidateUnit = normalizeMilitaryUnit(candidate.militaryUnit);
-  if (referenceUnit && candidateUnit && referenceUnit === candidateUnit) reasons.push('Aynı birlik');
+  reasons.push('Aynı birlik');
   if (candidate.departureCity === reference.departureCity) {
     reasons.push(`${getProvinceName(candidate.departureCity)}'dan yola çıkıyor`);
   }
@@ -156,6 +198,6 @@ export function getMatchReasonBadges(
 
 export function getDiscoveryEmptyStateCopy(segment: DiscoverySegment): string {
   if (segment === 'residence') return 'Henüz senin şehrinden bir devre bulunamadı.';
-  if (segment === 'departure') return 'Henüz seninle aynı şehirden yola çıkacak biri yok.';
+  if (segment === 'departure') return 'Henüz seninle aynı yerden yola çıkacak bir devre yok.';
   return 'Henüz senin devre grubunda başka kimse yok.';
 }

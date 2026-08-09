@@ -25,12 +25,15 @@ export function useDiscovery(profile: UserProfile) {
     militaryCity: profile.militaryCity,
     militaryPeriodYear: profile.militaryPeriodYear,
     militaryPeriodMonth: profile.militaryPeriodMonth,
-    militaryUnit: profile.militaryUnit,
+    militaryType: profile.militaryType,
+    militaryUnitId: null,
+    militaryUnitName: profile.militaryUnit,
   }), [
     profile.departureCity,
     profile.militaryCity,
     profile.militaryPeriodMonth,
     profile.militaryPeriodYear,
+    profile.militaryType,
     profile.militaryUnit,
     profile.residenceCity,
     profile.uid,
@@ -39,7 +42,14 @@ export function useDiscovery(profile: UserProfile) {
     militaryCity: profile.militaryCity,
     militaryPeriodMonth: profile.militaryPeriodMonth,
     militaryPeriodYear: profile.militaryPeriodYear,
-  }), [profile.militaryCity, profile.militaryPeriodMonth, profile.militaryPeriodYear]);
+    militaryType: profile.militaryType,
+    militaryUnitId: null,
+  }), [
+    profile.militaryCity,
+    profile.militaryPeriodMonth,
+    profile.militaryPeriodYear,
+    profile.militaryType,
+  ]);
 
   useEffect(() => {
     let cancelled = false;

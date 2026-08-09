@@ -22,7 +22,7 @@ export const DiscoveryProfileRow = memo(function DiscoveryProfileRow({
 }: DiscoveryProfileRowProps) {
   const { colors, radii, spacing } = useTheme();
   const photoURL = useProfilePhotoURL(profile.userId, profile.photoPath, profile.updatedAt);
-  const unit = profile.militaryUnit ?? 'Birliği henüz belli değil';
+  const unit = profile.militaryUnitName ?? 'Birliği henüz belli değil';
   const reasonBadges = getMatchReasonBadges(reference, profile);
 
   return (

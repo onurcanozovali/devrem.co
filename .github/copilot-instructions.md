@@ -133,6 +133,12 @@ Existing or planned areas include phone authentication, onboarding, preparation,
 
 Do not implement future areas merely because they are mentioned here.
 
+## Devre Identity
+
+Devre = same military period + same military city + same military unit + same military type. Residence and departure city are secondary relevance signals only after exact devre membership is established.
+
+Use canonical internal values and stable city/unit identifiers where available. Until every profile has a canonical `militaryUnitId`, normalized non-empty unit text may be used only as the documented temporary fallback; it never relaxes the other identity conditions.
+
 ## Preparation Feature
 
 Preparation is not just a shopping list. It includes official processes, documents, travel preparation, money and communication preparation, personal tasks before leaving, and bag and material preparation.

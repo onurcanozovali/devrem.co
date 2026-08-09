@@ -6,7 +6,8 @@ export interface PublicProfileProjection {
   militaryPeriodYear: number;
   militaryPeriodMonth: number;
   militaryType: 'standard' | 'paid' | 'reserveOfficer' | 'reserveNco';
-  militaryUnit: string | null;
+  militaryUnitId: string | null;
+  militaryUnitName: string | null;
   photoPath: string | null;
 }
 
@@ -32,7 +33,7 @@ export function createPublicProfileProjection(
 ): PublicProfileProjection | null {
   if (!uid || !isRecord(value) || value.onboardingCompleted !== true) return null;
   const firstName = typeof value.firstName === 'string' ? normalizeWhitespace(value.firstName) : '';
-  const militaryUnit = typeof value.militaryUnit === 'string'
+  const militaryUnitName = typeof value.militaryUnit === 'string'
     ? normalizeWhitespace(value.militaryUnit)
     : value.militaryUnit;
   const photoPath = value.photoPath ?? null;
@@ -51,7 +52,7 @@ export function createPublicProfileProjection(
     || value.militaryPeriodMonth < 1
     || value.militaryPeriodMonth > 12
     || !isMilitaryType(value.militaryType)
-    || !(militaryUnit === null || (typeof militaryUnit === 'string' && militaryUnit.length >= 2 && militaryUnit.length <= 120))
+    || !(militaryUnitName === null || (typeof militaryUnitName === 'string' && militaryUnitName.length >= 2 && militaryUnitName.length <= 120))
     || !(photoPath === null || photoPath === `users/${uid}/profile/avatar.jpg`)
   ) return null;
 
@@ -63,7 +64,8 @@ export function createPublicProfileProjection(
     militaryPeriodYear: value.militaryPeriodYear,
     militaryPeriodMonth: value.militaryPeriodMonth,
     militaryType: value.militaryType,
-    militaryUnit,
+    militaryUnitId: null,
+    militaryUnitName,
     photoPath,
   };
 }
