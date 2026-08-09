@@ -1,5 +1,6 @@
 export interface AccountDeletionDependencies {
   deleteAvatar: (uid: string) => Promise<void>;
+  deletePublicProfile: (uid: string) => Promise<void>;
   deleteProfile: (uid: string) => Promise<void>;
   deleteAuthUser: (uid: string) => Promise<void>;
   isAuthUserMissing: (error: unknown) => boolean;
@@ -21,6 +22,7 @@ export async function deleteAccountData(
   dependencies: AccountDeletionDependencies,
 ): Promise<void> {
   await dependencies.deleteAvatar(uid);
+  await dependencies.deletePublicProfile(uid);
   await dependencies.deleteProfile(uid);
 
   try {

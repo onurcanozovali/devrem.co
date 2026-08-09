@@ -7,6 +7,7 @@
     "node": "22"
   },
   "scripts": {
+    "backfill:public-profiles": "pnpm run build && node lib/runPublicProfileBackfill.js",
     "build": "tsc",
     "lint": "eslint src --ext .ts"
   },

@@ -225,6 +225,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /publicProfiles/{uid} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if false;
+    }
+
     match /users/{uid}/preparationItems/{itemId} {
       allow read: if isOwnProfile(uid);
 

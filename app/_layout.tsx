@@ -72,6 +72,7 @@ function RootNavigator() {
         </Stack.Protected>
         <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete'}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="devre/[userId]" />
         </Stack.Protected>
       </Stack>
     </>

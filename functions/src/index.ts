@@ -3,12 +3,26 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { initializeApp } from 'firebase-admin/app';
 import { logger } from 'firebase-functions';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { deleteAccountData, getProfilePhotoPath, isAuthUserMissing } from './accountDeletion.js';
+import { synchronizePublicProfile } from './publicProfileSync.js';
 
 initializeApp();
 
 const recentAuthenticationWindowSeconds = 5 * 60;
+
+export const syncPublicProfile = onDocumentWritten(
+  {
+    document: 'users/{uid}',
+    memory: '256MiB',
+    region: 'europe-west1',
+    retry: true,
+  },
+  async (event) => {
+    await synchronizePublicProfile(getFirestore(), event.params.uid);
+  },
+);
 
 function readBearerToken(authorizationHeader: string | undefined): string | null {
   const match = authorizationHeader?.match(/^Bearer ([^\s]+)$/);
@@ -57,6 +71,9 @@ export const deleteAccount = onRequest(
       await deleteAccountData(uid, {
         deleteAvatar: async (userId) => {
           await getStorage().bucket().file(getProfilePhotoPath(userId)).delete({ ignoreNotFound: true });
+        },
+        deletePublicProfile: async (userId) => {
+          await getFirestore().doc(`publicProfiles/${userId}`).delete();
         },
         deleteProfile: async (userId) => {
           const database = getFirestore();

@@ -1,0 +1,41 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "publicProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "militaryPeriodYear", "order": "ASCENDING" },
+        { "fieldPath": "militaryPeriodMonth", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "militaryPeriodYear", "order": "ASCENDING" },
+        { "fieldPath": "militaryPeriodMonth", "order": "ASCENDING" },
+        { "fieldPath": "militaryCity", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "militaryPeriodYear", "order": "ASCENDING" },
+        { "fieldPath": "militaryPeriodMonth", "order": "ASCENDING" },
+        { "fieldPath": "departureCity", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "militaryPeriodYear", "order": "ASCENDING" },
+        { "fieldPath": "militaryPeriodMonth", "order": "ASCENDING" },
+        { "fieldPath": "militaryCity", "order": "ASCENDING" },
+        { "fieldPath": "departureCity", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
