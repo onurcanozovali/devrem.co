@@ -11,7 +11,7 @@ import {
 } from '@react-native-firebase/firestore';
 
 import { parsePublicProfileData } from '@/features/matching/services/discoveryDomain';
-import type { DiscoveryReferenceProfile, PublicProfile } from '@/features/matching/types/discovery';
+import type { DiscoveryQuery, PublicProfile } from '@/features/matching/types/discovery';
 import { getFirebaseApp } from './app';
 
 export const discoveryPageSize = 40;
@@ -24,13 +24,12 @@ function parsePublicProfileSnapshot(
   return parsePublicProfileData(userId, { ...data, updatedAt });
 }
 
-export async function fetchPublicProfiles(reference: DiscoveryReferenceProfile): Promise<PublicProfile[]> {
+export async function fetchPublicProfiles(reference: DiscoveryQuery): Promise<PublicProfile[]> {
   const database = getFirestore(getFirebaseApp());
   const snapshot = await getDocs(query(
     collection(database, 'publicProfiles'),
     where('militaryPeriodYear', '==', reference.militaryPeriodYear),
     where('militaryPeriodMonth', '==', reference.militaryPeriodMonth),
-    where('militaryCity', '==', reference.militaryCity),
     limit(discoveryPageSize),
   ));
   return snapshot.docs.flatMap((documentSnapshot) => {

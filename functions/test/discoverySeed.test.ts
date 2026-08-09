@@ -11,7 +11,7 @@ const profiles = buildDiscoverySeedProfiles({
   militaryCity: 43,
   militaryPeriodYear: 2027,
   militaryPeriodMonth: 2,
-  militaryUnit: '1. Piyade Tugayı',
+  militaryUnitName: '1. Piyade Tugayı',
 });
 
 test('discovery seed creates exactly the requested deterministic scenario groups', () => {
@@ -28,10 +28,11 @@ test('discovery seed creates exactly the requested deterministic scenario groups
 });
 
 test('excluded and edge-case seed groups remain fake and outside private schema', () => {
-  const excludedDestination = profiles.find(({ group }) => group === 'E');
+  const differentCitySameUnit = profiles.find(({ group }) => group === 'E');
   const excludedPeriod = profiles.find(({ group }) => group === 'F');
   const edgeCase = profiles.find(({ group }) => group === 'G');
-  assert.notEqual(excludedDestination?.profile.militaryCity, 43);
+  assert.notEqual(differentCitySameUnit?.profile.militaryCity, 43);
+  assert.equal(differentCitySameUnit?.profile.militaryUnitName, '1. Piyade Tugayı');
   assert.notDeepEqual(
     [excludedPeriod?.profile.militaryPeriodYear, excludedPeriod?.profile.militaryPeriodMonth],
     [2027, 2],
@@ -40,4 +41,19 @@ test('excluded and edge-case seed groups remain fake and outside private schema'
   assert.equal(edgeCase?.profile.militaryType, 'paid');
   assert.ok(profiles.every(({ id }) => id.startsWith('devrem-discovery-seed-')));
   assert.ok(profiles.every(({ profile }) => !('birthYear' in profile)));
+});
+
+test('seed scenarios reserve devre membership for the same period and unit', () => {
+  const sameUnit = ({ profile }: (typeof profiles)[number]) => (
+    profile.militaryPeriodYear === 2027
+    && profile.militaryPeriodMonth === 2
+    && profile.militaryUnitName?.toLocaleLowerCase('tr-TR') === '1. piyade tugayı'
+  );
+  assert.deepEqual(profiles.filter(sameUnit).map(({ group }) => group), ['A', 'A', 'A', 'C', 'C', 'E', 'G']);
+  assert.ok(profiles.filter(({ group }) => group === 'B').every(({ profile }) => (
+    profile.militaryCity === 43 && profile.militaryUnitName !== '1. Piyade Tugayı'
+  )));
+  assert.ok(profiles.filter(({ group }) => group === 'D').every(({ profile }) => profile.militaryUnitName === null));
+  assert.ok(profiles.filter(({ group }) => group === 'A').every(({ profile }) => profile.departureCity === 6));
+  assert.ok(profiles.filter(({ group }) => group === 'C').every(({ profile }) => profile.residenceCity === 34));
 });

@@ -34,7 +34,8 @@ test('trusted projection contains only discovery-safe normalized fields', () => 
     militaryPeriodYear: 2027,
     militaryPeriodMonth: 2,
     militaryType: 'standard',
-    militaryUnit: '1. Piyade Tugayı',
+    militaryUnitId: null,
+    militaryUnitName: '1. Piyade Tugayı',
     photoPath: 'users/user-1/profile/avatar.jpg',
   });
   assert.equal('lastName' in (projection ?? {}), false);

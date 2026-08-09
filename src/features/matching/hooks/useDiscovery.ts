@@ -25,7 +25,8 @@ export function useDiscovery(profile: UserProfile) {
     militaryCity: profile.militaryCity,
     militaryPeriodYear: profile.militaryPeriodYear,
     militaryPeriodMonth: profile.militaryPeriodMonth,
-    militaryUnit: profile.militaryUnit,
+    militaryUnitId: null,
+    militaryUnitName: profile.militaryUnit,
   }), [profile]);
 
   useEffect(() => {

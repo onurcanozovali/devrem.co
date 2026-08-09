@@ -56,7 +56,7 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 			<View style={{ gap: spacing.md, paddingTop: spacing.md }}>
 				<View style={{ gap: spacing.xs, paddingHorizontal: spacing.lg }}>
 					<AppText variant="display" weight="900">Devreni Bul</AppText>
-					<AppText color="muted">Seninle aynı dönemde ve aynı yere gidecek kişileri keşfet.</AppText>
+					<AppText color="muted">Seninle aynı dönemde aynı birlikte görev yapacak kişileri keşfet.</AppText>
 					<AppText weight="800">{periodLabel} · {destinationLabel}</AppText>
 				</View>
 				<ScrollView
@@ -133,6 +133,7 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 }
 
 export function MatchingScreen() {
+	const { colors, spacing } = useTheme();
 	const { profile } = useProfile();
 	if (!profile) {
 		return (
@@ -141,6 +142,19 @@ export function MatchingScreen() {
 					title="Profilini tamamla"
 					description="Devrelerini keşfetmek için askerlik bilgilerini tamamlaman gerekiyor."
 				/>
+			</SafeAreaView>
+		);
+	}
+	if (!profile.militaryUnit) {
+		return (
+			<SafeAreaView style={{ backgroundColor: colors.background, flex: 1 }}>
+				<View style={{ gap: spacing.lg, padding: spacing.lg }}>
+					<AppText variant="display" weight="900">Devreni Bul</AppText>
+					<EmptyState
+						title="Birlik bilgini ekle"
+						description="Devrelerini bulabilmemiz için görev yapacağın birlik bilgisini profilinden ekle."
+					/>
+				</View>
 			</SafeAreaView>
 		);
 	}

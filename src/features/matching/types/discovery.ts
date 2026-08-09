@@ -10,7 +10,8 @@ export interface PublicProfile {
   militaryPeriodYear: number;
   militaryPeriodMonth: number;
   militaryType: MilitaryType;
-  militaryUnit: string | null;
+  militaryUnitId: string | null;
+  militaryUnitName: string | null;
   photoPath: string | null;
   updatedAt: Date;
 }
@@ -22,8 +23,14 @@ export interface DiscoveryReferenceProfile {
   militaryCity: ProvinceCode;
   militaryPeriodYear: number;
   militaryPeriodMonth: number;
-  militaryUnit: string | null;
+  militaryUnitId: string | null;
+  militaryUnitName: string | null;
 }
+
+export type DiscoveryQuery = Pick<
+  DiscoveryReferenceProfile,
+  'militaryPeriodMonth' | 'militaryPeriodYear'
+>;
 
 export type DiscoverySegment = 'all' | 'residence' | 'departure';
 

@@ -88,7 +88,7 @@ async function verifySeed(): Promise<Awaited<ReturnType<typeof verifyDiscoveryPr
     throw new Error('Expected all 4 synthetic discovery avatars to exist.');
   }
   const eligibleSeedCount = await verifyDiscoveryQuery(database);
-  console.info(`Verified the indexed discovery query returns ${eligibleSeedCount} eligible seed profiles.`);
+  console.info(`Verified the period query returns ${eligibleSeedCount} seed candidates and exact-unit filtering retains 7 devre profiles.`);
   return verified;
 }
 
