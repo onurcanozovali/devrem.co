@@ -11,12 +11,17 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import {
+  collection,
   deleteDoc,
   doc,
+  getDoc,
+  getDocs,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 
 const projectId = 'devrem-rules-test';
@@ -45,6 +50,23 @@ function profileData(uid: string, year: number, month: number) {
 async function seedProfile(uid: string, year: number, month: number) {
   await environment.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), 'users', uid), profileData(uid, year, month));
+  });
+}
+
+async function seedPublicProfile(uid: string, year: number, month: number) {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'publicProfiles', uid), {
+      firstName: 'Onur',
+      residenceCity: 34,
+      departureCity: 34,
+      militaryCity: 6,
+      militaryType: 'standard',
+      militaryPeriodYear: year,
+      militaryPeriodMonth: month,
+      militaryUnit: null,
+      photoPath: null,
+      updatedAt: Timestamp.fromDate(new Date('2026-08-09T00:00:00Z')),
+    });
   });
 }
 
@@ -113,4 +135,42 @@ test('owner may set only their deterministic optional profile photo path', async
     photoPath: 'users/user-2/profile/avatar.jpg',
     updatedAt: serverTimestamp(),
   }));
+});
+
+test('authenticated users may browse public projections but unauthenticated users cannot', async () => {
+  await environment.clearFirestore();
+  await seedPublicProfile('user-1', 2027, 2);
+  const authenticatedDatabase = environment.authenticatedContext('user-2').firestore();
+  await assertSucceeds(getDoc(doc(authenticatedDatabase, 'publicProfiles', 'user-1')));
+  const results = await assertSucceeds(getDocs(query(
+    collection(authenticatedDatabase, 'publicProfiles'),
+    where('militaryPeriodYear', '==', 2027),
+    where('militaryPeriodMonth', '==', 2),
+    where('militaryCity', '==', 6),
+  )));
+  assert.equal(results.size, 1);
+
+  const unauthenticatedDatabase = environment.unauthenticatedContext().firestore();
+  await assertFails(getDocs(collection(unauthenticatedDatabase, 'publicProfiles')));
+});
+
+test('clients cannot spoof, update, or delete public projections', async () => {
+  await environment.clearFirestore();
+  await seedPublicProfile('user-1', 2027, 2);
+  const ownerDatabase = environment.authenticatedContext('user-1').firestore();
+  const ownerReference = doc(ownerDatabase, 'publicProfiles', 'user-1');
+  await assertFails(updateDoc(ownerReference, { firstName: 'Sahte' }));
+  await assertFails(deleteDoc(ownerReference));
+  await assertFails(setDoc(doc(ownerDatabase, 'publicProfiles', 'user-2'), {
+    firstName: 'Sahte',
+    militaryPeriodYear: 2027,
+    militaryPeriodMonth: 2,
+  }));
+});
+
+test('public discovery access does not expose another private user profile', async () => {
+  await environment.clearFirestore();
+  await seedProfile('user-1', 2027, 2);
+  const otherDatabase = environment.authenticatedContext('user-2').firestore();
+  await assertFails(getDoc(doc(otherDatabase, 'users', 'user-1')));
 });

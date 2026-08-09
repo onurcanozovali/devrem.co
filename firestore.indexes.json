@@ -1,0 +1,14 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "publicProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "militaryPeriodYear", "order": "ASCENDING" },
+        { "fieldPath": "militaryPeriodMonth", "order": "ASCENDING" },
+        { "fieldPath": "militaryCity", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -1,2 +1,148 @@
-import { PlaceholderScreen } from '@/components/common/PlaceholderScreen';
-export function MatchingScreen() { return <PlaceholderScreen title="Devreler" description="Dönem, şehir ve birlik eşleşmeleri daha sonra eklenecek." />; }
+import { router, type Href } from 'expo-router';
+import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { EmptyState } from '@/components/common/EmptyState';
+import { AppText } from '@/components/ui/AppText';
+import { getProvinceName } from '@/data/turkeyProvinces';
+import { useProfile } from '@/features/profile/hooks/useProfile';
+import { getMilitaryPeriodLabel } from '@/features/profile/profileOptions';
+import type { UserProfile } from '@/features/profile/types/profile';
+import { useTheme } from '@/theme/ThemeProvider';
+import { DiscoveryProfileRow } from './components/DiscoveryProfileRow';
+import { useDiscovery } from './hooks/useDiscovery';
+import { getDiscoveryEmptyStateCopy } from './services/discoveryDomain';
+import type { PublicProfile } from './types/discovery';
+
+function DiscoverySkeleton() {
+	const { colors, spacing } = useTheme();
+	return (
+		<View accessibilityRole="progressbar" accessibilityLabel="Devreler yükleniyor" style={{ gap: spacing.md }}>
+			{[0, 1, 2, 3].map((item) => (
+				<View key={item} style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.md, minHeight: 92 }}>
+					<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 32, height: 64, width: 64 }} />
+					<View style={{ flex: 1, gap: spacing.sm }}>
+						<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 4, height: 16, width: '38%' }} />
+						<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 4, height: 14, width: '72%' }} />
+						<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 4, height: 12, width: '54%' }} />
+					</View>
+				</View>
+			))}
+		</View>
+	);
+}
+
+function DiscoveryContent({ profile }: { profile: UserProfile }) {
+	const { colors, radii, spacing } = useTheme();
+	const {
+		error,
+		profiles,
+		reference,
+		retry,
+		segments,
+		selectedSegment,
+		setSelectedSegment,
+		status,
+	} = useDiscovery(profile);
+	const periodLabel = getMilitaryPeriodLabel(profile.militaryPeriodYear, profile.militaryPeriodMonth);
+	const destinationLabel = getProvinceName(profile.militaryCity);
+
+	const openProfile = (userId: string) => {
+		router.push(`/devre/${userId}` as Href);
+	};
+
+	return (
+		<SafeAreaView style={{ backgroundColor: colors.background, flex: 1 }} edges={['top', 'left', 'right']}>
+			<View style={{ gap: spacing.md, paddingTop: spacing.md }}>
+				<View style={{ gap: spacing.xs, paddingHorizontal: spacing.lg }}>
+					<AppText variant="display" weight="900">Devreni Bul</AppText>
+					<AppText color="muted">Seninle aynı dönemde ve aynı yere gidecek kişileri keşfet.</AppText>
+					<AppText weight="800">{periodLabel} · {destinationLabel}</AppText>
+				</View>
+				<ScrollView
+					horizontal
+					showsHorizontalScrollIndicator={false}
+					contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg }}
+				>
+					{segments.map((segment) => {
+						const selected = segment.id === selectedSegment;
+						return (
+							<Pressable
+								key={segment.id}
+								accessibilityRole="button"
+								accessibilityState={{ selected }}
+								onPress={() => setSelectedSegment(segment.id)}
+								style={({ pressed }) => ({
+									alignItems: 'center',
+									backgroundColor: selected ? colors.primary : colors.surface,
+									borderColor: selected ? colors.primary : colors.border,
+									borderRadius: radii.pill,
+									borderWidth: 1,
+									justifyContent: 'center',
+									minHeight: 44,
+									opacity: pressed ? 0.8 : 1,
+									paddingHorizontal: spacing.md,
+								})}
+							>
+								<AppText style={{ color: selected ? colors.onPrimary : colors.text }} variant="caption" weight="800">
+									{segment.label}
+								</AppText>
+							</Pressable>
+						);
+					})}
+				</ScrollView>
+			</View>
+
+			{status === 'loading' ? (
+				<View style={{ padding: spacing.lg }}><DiscoverySkeleton /></View>
+			) : status === 'error' ? (
+				<EmptyState
+					title="Devreler yüklenemedi"
+					description={error ?? 'Bağlantını kontrol edip tekrar dene.'}
+					actionLabel="Tekrar dene"
+					onAction={retry}
+				/>
+			) : (
+				<FlatList<PublicProfile>
+					data={profiles}
+					keyExtractor={(item) => item.userId}
+					renderItem={({ item }) => (
+						<DiscoveryProfileRow
+							profile={item}
+							reference={reference}
+							onPress={openProfile}
+						/>
+					)}
+					ItemSeparatorComponent={() => <View style={{ backgroundColor: colors.border, height: 1 }} />}
+					ListEmptyComponent={(
+						<EmptyState
+							title="Henüz eşleşme yok"
+							description={getDiscoveryEmptyStateCopy(selectedSegment)}
+						/>
+					)}
+					contentContainerStyle={{ flexGrow: 1, paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, paddingTop: spacing.sm }}
+					refreshControl={<RefreshControl refreshing={false} onRefresh={retry} tintColor={colors.primary} />}
+					initialNumToRender={8}
+					maxToRenderPerBatch={8}
+					windowSize={7}
+				/>
+			)}
+
+		</SafeAreaView>
+	);
+}
+
+export function MatchingScreen() {
+	const { profile } = useProfile();
+	if (!profile) {
+		return (
+			<SafeAreaView style={{ flex: 1 }}>
+				<EmptyState
+					title="Profilini tamamla"
+					description="Devrelerini keşfetmek için askerlik bilgilerini tamamlaman gerekiyor."
+				/>
+			</SafeAreaView>
+		);
+	}
+	return <DiscoveryContent profile={profile} />;
+}

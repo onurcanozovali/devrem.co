@@ -15,6 +15,7 @@ export {
   updateUserProfile,
   updateUserProfilePhotoPath,
 } from './firestore';
+export { discoveryPageSize, fetchPublicProfile, fetchPublicProfiles } from './discovery';
 export { deleteProfilePhoto, resolveProfilePhotoURL, uploadProfilePhoto } from './profilePhoto';
 export {
   createPreparationItem,

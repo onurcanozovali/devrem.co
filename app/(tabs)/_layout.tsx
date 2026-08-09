@@ -38,7 +38,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Ana Sayfa' }} />
       <Tabs.Screen name="preparation" options={{ title: 'Hazırlık' }} />
-      <Tabs.Screen name="matching" options={{ title: 'Devreler' }} />
+      <Tabs.Screen name="matching" options={{ title: 'Devreni Bul' }} />
       <Tabs.Screen name="chats" options={{ title: 'Sohbetler' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
     </Tabs>
