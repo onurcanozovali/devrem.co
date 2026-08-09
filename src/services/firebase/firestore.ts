@@ -19,6 +19,7 @@ import {
   type UserProfile,
   type UserProfileSnapshot,
 } from '@/features/profile/types/profile';
+import { isValidProfilePhotoPath } from '@/features/profile/services/profilePhotoDomain';
 import { getFirebaseApp } from './app';
 
 function getFirestoreDatabase() {
@@ -112,6 +113,27 @@ export async function updateUserProfile(
       createdAt: existingSnapshot.get('createdAt'),
       updatedAt: serverTimestamp(),
     });
+  });
+
+  const savedProfile = await fetchUserProfile(uid);
+  if (savedProfile.status !== 'complete') throw new ProfileFlowError('unknown');
+  return savedProfile.profile;
+}
+
+export async function updateUserProfilePhotoPath(
+  uid: string,
+  photoPath: string | null,
+): Promise<UserProfile> {
+  if (!isValidProfilePhotoPath(uid, photoPath)) throw new ProfileFlowError('malformed');
+  const database = getFirestoreDatabase();
+  const profileReference = getUserProfileReference(uid);
+
+  await runTransaction(database, async (transaction) => {
+    const existingSnapshot = await transaction.get(profileReference);
+    if (!existingSnapshot.exists() || !parseCompleteProfile(uid, existingSnapshot.data())) {
+      throw new ProfileFlowError('malformed');
+    }
+    transaction.update(profileReference, { photoPath, updatedAt: serverTimestamp() });
   });
 
   const savedProfile = await fetchUserProfile(uid);

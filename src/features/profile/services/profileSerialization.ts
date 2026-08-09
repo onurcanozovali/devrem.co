@@ -16,6 +16,7 @@ import {
   type UserProfile,
 } from '../types/profile';
 import { createProfileFormValues, validateProfileForm } from './profileForm';
+import { isValidProfilePhotoPath } from './profilePhotoDomain';
 
 interface LegacyMilitaryPeriod {
   year: number;
@@ -24,6 +25,7 @@ interface LegacyMilitaryPeriod {
 
 export interface SerializedProfileData extends CompleteUserProfileInput {
   uid: string;
+  photoPath: string | null;
   onboardingCompleted: true;
 }
 
@@ -67,6 +69,7 @@ export function parseCompletedProfileData(
   if (!isRecord(value) || value.uid !== uid || value.onboardingCompleted !== true) return null;
 
   const period = readMilitaryPeriod(value);
+  const photoPath = value.photoPath ?? null;
   if (
     !period
     || !isValidName(value.firstName)
@@ -78,6 +81,7 @@ export function parseCompletedProfileData(
     || !isMilitaryType(value.militaryType)
     || !isValidOptionalMilitaryUnit(value.militaryUnit)
     || !isValidStoredDate(value.reportingDate)
+    || !isValidProfilePhotoPath(uid, photoPath)
   ) return null;
 
   return {
@@ -93,6 +97,7 @@ export function parseCompletedProfileData(
     militaryPeriodMonth: period.month,
     militaryUnit: value.militaryUnit === null ? null : normalizeWhitespace(value.militaryUnit),
     reportingDate: value.reportingDate,
+    photoPath,
     onboardingCompleted: true,
   };
 }
@@ -138,6 +143,7 @@ export function serializeCompletedProfileData(
     militaryPeriodMonth: input.militaryPeriodMonth,
     militaryUnit: input.militaryUnit === null ? null : normalizeWhitespace(input.militaryUnit),
     reportingDate: input.reportingDate,
+    photoPath: null,
     onboardingCompleted: true,
   };
 }
@@ -164,6 +170,7 @@ export function serializeUpdatedProfileData(
   return {
     uid,
     ...result.input,
+    photoPath: existingProfile.photoPath,
     onboardingCompleted: true,
   };
 }

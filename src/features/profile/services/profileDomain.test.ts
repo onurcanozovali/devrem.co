@@ -12,6 +12,7 @@ import {
   serializeCompletedProfileData,
   serializeUpdatedProfileData,
 } from './profileSerialization';
+import { getProfileInitials, getProfilePhotoPath } from './profilePhotoDomain';
 import {
   getMinimumReportingDate,
   isMilitaryPeriodCurrentOrFuture,
@@ -44,6 +45,7 @@ const historicalProfile: UserProfile = {
   militaryPeriodYear: 2025,
   militaryPeriodMonth: 7,
   reportingDate: '2025-07-10',
+  photoPath: null,
   onboardingCompleted: true,
   createdAt: null,
   updatedAt: null,
@@ -173,6 +175,33 @@ test('serializer writes the flat query-friendly schema and permits an unknown un
   assert.equal(serialized.militaryUnit, null);
   assert.equal('militaryPeriod' in serialized, false);
   assert.deepEqual(parseCompletedProfileData('user-1', serialized), serialized);
+});
+
+test('profile photos remain optional and only accept the deterministic owner path', () => {
+  const serialized = serializeCompletedProfileData('user-1', validInput, referenceDate);
+  assert.equal(serialized?.photoPath, null);
+  assert.equal(parseCompletedProfileData('user-1', { ...serialized, photoPath: undefined })?.photoPath, null);
+  assert.equal(
+    parseCompletedProfileData('user-1', { ...serialized, photoPath: getProfilePhotoPath('user-1') })?.photoPath,
+    'users/user-1/profile/avatar.jpg',
+  );
+  assert.equal(
+    parseCompletedProfileData('user-1', { ...serialized, photoPath: 'users/user-2/profile/avatar.jpg' }),
+    null,
+  );
+  assert.equal(getProfileInitials(' onur ', ' özovalı '), 'OÖ');
+});
+
+test('normal profile edits preserve the current photo path', () => {
+  const existingProfile = {
+    ...historicalProfile,
+    photoPath: getProfilePhotoPath('user-1'),
+  };
+  const serialized = serializeUpdatedProfileData('user-1', {
+    ...existingProfile,
+    firstName: 'Onur Can',
+  }, existingProfile, referenceDate);
+  assert.equal(serialized?.photoPath, existingProfile.photoPath);
 });
 
 test('known unit names are normalized and length-validated', () => {

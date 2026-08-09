@@ -100,3 +100,17 @@ test('users cannot update another profile or delete their own profile directly',
   await assertFails(deleteDoc(ownerReference));
   assert.ok(true);
 });
+
+test('owner may set only their deterministic optional profile photo path', async () => {
+  await environment.clearFirestore();
+  await seedProfile('user-1', 2025, 7);
+  const reference = doc(environment.authenticatedContext('user-1').firestore(), 'users', 'user-1');
+  await assertSucceeds(updateDoc(reference, {
+    photoPath: 'users/user-1/profile/avatar.jpg',
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(reference, {
+    photoPath: 'users/user-2/profile/avatar.jpg',
+    updatedAt: serverTimestamp(),
+  }));
+});

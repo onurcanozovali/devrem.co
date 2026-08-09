@@ -1,8 +1,16 @@
 import { createContext, type PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { fetchUserProfile, saveCompletedUserProfile, updateUserProfile } from '@/services/firebase';
+import {
+  deleteProfilePhoto,
+  fetchUserProfile,
+  saveCompletedUserProfile,
+  updateUserProfile,
+  updateUserProfilePhotoPath,
+  uploadProfilePhoto,
+} from '@/services/firebase';
 import { mapProfileError, ProfileFlowError } from './services/profileErrors';
+import { mapProfilePhotoError } from './services/profilePhotoDomain';
 import type { CompleteUserProfileInput, ProfileStatus, UserProfile } from './types/profile';
 
 interface ProfileContextValue {
@@ -12,6 +20,8 @@ interface ProfileContextValue {
   refreshProfile: () => Promise<void>;
   completeOnboarding: (input: CompleteUserProfileInput) => Promise<void>;
   updateProfile: (input: CompleteUserProfileInput) => Promise<void>;
+  replaceProfilePhoto: (localUri: string, onProgress?: (progress: number) => void) => Promise<void>;
+  removeProfilePhoto: () => Promise<void>;
 }
 
 export const ProfileContext = createContext<ProfileContextValue | null>(null);
@@ -87,6 +97,51 @@ export function ProfileProvider({ children }: PropsWithChildren) {
     }
   }, [authStatus, session]);
 
+  const replaceProfilePhoto = useCallback(async (
+    localUri: string,
+    onProgress?: (progress: number) => void,
+  ) => {
+    if (authStatus !== 'authenticated' || !session || !profile) {
+      throw new ProfileFlowError('permission-denied');
+    }
+
+    try {
+      const photoPath = await uploadProfilePhoto(session.userId, localUri, onProgress);
+      let savedProfile: UserProfile;
+      try {
+        savedProfile = await updateUserProfilePhotoPath(session.userId, photoPath);
+      } catch (error: unknown) {
+        if (!profile.photoPath) {
+          try {
+            await deleteProfilePhoto(session.userId);
+          } catch {
+            // The stable owner path will be overwritten by the next upload or removed with the account.
+          }
+        }
+        throw error;
+      }
+      setProfile(savedProfile);
+      setError(null);
+    } catch (caughtError: unknown) {
+      throw mapProfilePhotoError(caughtError);
+    }
+  }, [authStatus, profile, session]);
+
+  const removeProfilePhoto = useCallback(async () => {
+    if (authStatus !== 'authenticated' || !session || !profile) {
+      throw new ProfileFlowError('permission-denied');
+    }
+
+    try {
+      const savedProfile = await updateUserProfilePhotoPath(session.userId, null);
+      setProfile(savedProfile);
+      setError(null);
+      await deleteProfilePhoto(session.userId);
+    } catch (caughtError: unknown) {
+      throw mapProfilePhotoError(caughtError);
+    }
+  }, [authStatus, profile, session]);
+
   const value = useMemo<ProfileContextValue>(
     () => ({
       status: authStatus === 'authenticated' ? status : 'idle',
@@ -95,8 +150,10 @@ export function ProfileProvider({ children }: PropsWithChildren) {
       refreshProfile,
       completeOnboarding,
       updateProfile,
+      replaceProfilePhoto,
+      removeProfilePhoto,
     }),
-    [authStatus, completeOnboarding, error, profile, refreshProfile, status, updateProfile],
+    [authStatus, completeOnboarding, error, profile, refreshProfile, removeProfilePhoto, replaceProfilePhoto, status, updateProfile],
   );
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;

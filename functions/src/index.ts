@@ -1,8 +1,10 @@
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import { initializeApp } from 'firebase-admin/app';
 import { logger } from 'firebase-functions';
 import { onRequest } from 'firebase-functions/v2/https';
+import { deleteAccountData, getProfilePhotoPath, isAuthUserMissing } from './accountDeletion.js';
 
 initializeApp();
 
@@ -52,19 +54,17 @@ export const deleteAccount = onRequest(
     }
 
     try {
-      const database = getFirestore();
-      await database.recursiveDelete(database.doc(`users/${uid}`));
-
-      try {
-        await getAuth().deleteUser(uid);
-      } catch (error: unknown) {
-        if (
-          typeof error !== 'object'
-          || error === null
-          || !('code' in error)
-          || error.code !== 'auth/user-not-found'
-        ) throw error;
-      }
+      await deleteAccountData(uid, {
+        deleteAvatar: async (userId) => {
+          await getStorage().bucket().file(getProfilePhotoPath(userId)).delete({ ignoreNotFound: true });
+        },
+        deleteProfile: async (userId) => {
+          const database = getFirestore();
+          await database.recursiveDelete(database.doc(`users/${userId}`));
+        },
+        deleteAuthUser: async (userId) => getAuth().deleteUser(userId),
+        isAuthUserMissing,
+      });
 
       response.status(200).json({ deleted: true });
     } catch (error: unknown) {
