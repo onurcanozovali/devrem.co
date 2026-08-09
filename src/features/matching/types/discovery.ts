@@ -23,13 +23,14 @@ export interface DiscoveryReferenceProfile {
   militaryCity: ProvinceCode;
   militaryPeriodYear: number;
   militaryPeriodMonth: number;
+  militaryType: MilitaryType;
   militaryUnitId: string | null;
   militaryUnitName: string | null;
 }
 
 export type DiscoveryQuery = Pick<
   DiscoveryReferenceProfile,
-  'militaryPeriodMonth' | 'militaryPeriodYear'
+  'militaryCity' | 'militaryPeriodMonth' | 'militaryPeriodYear' | 'militaryType' | 'militaryUnitId'
 >;
 
 export type DiscoverySegment = 'all' | 'residence' | 'departure';

@@ -21,6 +21,7 @@ const reference = {
   militaryCity: 34 as const,
   militaryPeriodYear: 2027,
   militaryPeriodMonth: 2,
+  militaryType: 'standard' as const,
   militaryUnitId: null,
   militaryUnitName: '1. Piyade Tugayı',
 };
@@ -57,10 +58,11 @@ test('public projection accepts current and legacy discovery-safe unit fields', 
   assert.equal(parsePublicProfileData(userId, { ...document, phoneNumber: '+905000000000' }), null);
 });
 
-test('base devre pool requires the same period and unit and excludes the current user', () => {
+test('base devre pool requires the same period, city, unit, and type', () => {
   const candidates = [
     createProfile({ userId: 'current-user' }),
     createProfile({ userId: 'eligible' }),
+    createProfile({ userId: 'different-type', militaryType: 'paid' }),
     createProfile({ userId: 'same-city-different-unit', militaryUnitName: 'Farklı Birlik' }),
     createProfile({ userId: 'same-city-unknown-unit', militaryUnitName: null }),
     createProfile({ userId: 'same-unit-different-city', militaryCity: 16 }),
@@ -68,7 +70,7 @@ test('base devre pool requires the same period and unit and excludes the current
   ];
   assert.deepEqual(
     filterAndRankPublicProfiles(candidates, reference).map(({ userId }) => userId),
-    ['eligible', 'same-unit-different-city'],
+    ['eligible'],
   );
 });
 
@@ -99,6 +101,17 @@ test('canonical unit IDs override matching display names', () => {
   ), -1);
 });
 
+test('missing or malformed military types never create exact devre membership', () => {
+  assert.equal(getDiscoveryRelevanceScore(
+    reference,
+    createProfile({ militaryType: undefined as never }),
+  ), -1);
+  assert.equal(getDiscoveryRelevanceScore(
+    { ...reference, militaryType: 'invalid' as never },
+    createProfile(),
+  ), -1);
+});
+
 test('departure and residence only affect relevance inside the exact devre pool', () => {
   assert.equal(getDiscoveryRelevanceScore(reference, createProfile({ militaryPeriodMonth: 3 })), -1);
   const profiles = filterAndRankPublicProfiles([
@@ -106,6 +119,8 @@ test('departure and residence only affect relevance inside the exact devre pool'
     createProfile({ userId: 'departure', departureCity: 6 }),
     createProfile({ userId: 'other' }),
     createProfile({ userId: 'city-only', residenceCity: 55, departureCity: 6, militaryUnitName: 'Farklı Birlik' }),
+    createProfile({ userId: 'departure-only', departureCity: 6, militaryType: 'paid' }),
+    createProfile({ userId: 'residence-only', residenceCity: 55, militaryCity: 16 }),
   ], reference);
   assert.deepEqual(profiles.map(({ userId }) => userId), ['departure', 'residence', 'other']);
 });

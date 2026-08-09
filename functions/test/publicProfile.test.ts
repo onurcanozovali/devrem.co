@@ -46,6 +46,8 @@ test('trusted projection contains only discovery-safe normalized fields', () => 
 test('incomplete or invalid private profiles are not projected', () => {
   assert.equal(createPublicProfileProjection('user-1', { ...privateProfile, onboardingCompleted: false }), null);
   assert.equal(createPublicProfileProjection('user-1', { ...privateProfile, residenceCity: 0 }), null);
+  assert.equal(createPublicProfileProjection('user-1', { ...privateProfile, militaryType: null }), null);
+  assert.equal(createPublicProfileProjection('user-1', { ...privateProfile, militaryType: 'Bedelli' }), null);
   assert.equal(createPublicProfileProjection('user-1', {
     ...privateProfile,
     photoPath: 'users/user-2/profile/avatar.jpg',

@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { AppText } from '@/components/ui/AppText';
 import { getProvinceName } from '@/data/turkeyProvinces';
 import { useProfile } from '@/features/profile/hooks/useProfile';
-import { getMilitaryPeriodLabel } from '@/features/profile/profileOptions';
+import { getMilitaryPeriodLabel, militaryTypeLabels } from '@/features/profile/profileOptions';
 import type { UserProfile } from '@/features/profile/types/profile';
 import { useTheme } from '@/theme/ThemeProvider';
 import { DiscoveryProfileRow } from './components/DiscoveryProfileRow';
@@ -56,8 +56,8 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 			<View style={{ gap: spacing.md, paddingTop: spacing.md }}>
 				<View style={{ gap: spacing.xs, paddingHorizontal: spacing.lg }}>
 					<AppText variant="display" weight="900">Devreni Bul</AppText>
-					<AppText color="muted">Seninle aynı dönemde aynı birlikte görev yapacak kişileri keşfet.</AppText>
-					<AppText weight="800">{periodLabel} · {destinationLabel}</AppText>
+					<AppText color="muted">Aynı dönem, şehir, birlik ve askerlik türündeki kişileri keşfet.</AppText>
+					<AppText weight="800">{periodLabel} · {destinationLabel} · {militaryTypeLabels[profile.militaryType]}</AppText>
 				</View>
 				<ScrollView
 					horizontal

@@ -88,7 +88,7 @@ async function verifySeed(): Promise<Awaited<ReturnType<typeof verifyDiscoveryPr
     throw new Error('Expected all 4 synthetic discovery avatars to exist.');
   }
   const eligibleSeedCount = await verifyDiscoveryQuery(database);
-  console.info(`Verified the period query returns ${eligibleSeedCount} seed candidates and exact-unit filtering retains 7 devre profiles.`);
+  console.info(`Verified the base identity query returns ${eligibleSeedCount} seed candidates and exact-unit filtering retains 6 devre profiles.`);
   return verified;
 }
 
@@ -109,7 +109,7 @@ async function run(): Promise<void> {
   const count = await seedDiscoveryProfiles(database, bucket, context);
   const verified = await verifySeed();
   console.info(`Seeded and verified ${count} discovery profiles in ${developmentProjectId}.`);
-  console.info(`Context: ${context.militaryPeriodMonth}/${context.militaryPeriodYear}, destination ${context.militaryCity}, residence ${context.residenceCity}, departure ${context.departureCity}.`);
+  console.info(`Context: ${context.militaryPeriodMonth}/${context.militaryPeriodYear}, destination ${context.militaryCity}, type ${context.militaryType}, residence ${context.residenceCity}, departure ${context.departureCity}.`);
   for (const profile of verified) console.info(`${profile.id}: ${profile.firstName}`);
 }
 

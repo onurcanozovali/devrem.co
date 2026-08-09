@@ -25,6 +25,7 @@ export function useDiscovery(profile: UserProfile) {
     militaryCity: profile.militaryCity,
     militaryPeriodYear: profile.militaryPeriodYear,
     militaryPeriodMonth: profile.militaryPeriodMonth,
+    militaryType: profile.militaryType,
     militaryUnitId: null,
     militaryUnitName: profile.militaryUnit,
   }), [profile]);

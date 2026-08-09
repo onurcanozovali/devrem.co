@@ -109,15 +109,24 @@ export function hasExactMilitaryUnitMatch(
   return referenceUnit !== null && candidateUnit !== null && referenceUnit === candidateUnit;
 }
 
+export function hasExactDevreMatch(
+  reference: DiscoveryReferenceProfile,
+  candidate: PublicProfile,
+): boolean {
+  return isMilitaryType(reference.militaryType)
+    && isMilitaryType(candidate.militaryType)
+    && candidate.militaryPeriodYear === reference.militaryPeriodYear
+    && candidate.militaryPeriodMonth === reference.militaryPeriodMonth
+    && candidate.militaryCity === reference.militaryCity
+    && candidate.militaryType === reference.militaryType
+    && hasExactMilitaryUnitMatch(reference, candidate);
+}
+
 export function getDiscoveryRelevanceScore(
   reference: DiscoveryReferenceProfile,
   candidate: PublicProfile,
 ): number {
-  if (
-    candidate.militaryPeriodYear !== reference.militaryPeriodYear
-    || candidate.militaryPeriodMonth !== reference.militaryPeriodMonth
-    || !hasExactMilitaryUnitMatch(reference, candidate)
-  ) return -1;
+  if (!hasExactDevreMatch(reference, candidate)) return -1;
 
   let score = 0;
   if (candidate.departureCity === reference.departureCity) score += 60;
@@ -132,9 +141,7 @@ export function filterAndRankPublicProfiles(
   return candidates
     .filter((candidate) => (
       candidate.userId !== reference.userId
-      && candidate.militaryPeriodYear === reference.militaryPeriodYear
-      && candidate.militaryPeriodMonth === reference.militaryPeriodMonth
-      && hasExactMilitaryUnitMatch(reference, candidate)
+      && hasExactDevreMatch(reference, candidate)
     ))
     .sort((left, right) => {
       const scoreDifference = getDiscoveryRelevanceScore(reference, right)
@@ -164,9 +171,7 @@ export function filterPublicProfilesBySegment(
 ): PublicProfile[] {
   const devreProfiles = profiles.filter((profile) => (
     profile.userId !== reference.userId
-    && profile.militaryPeriodYear === reference.militaryPeriodYear
-    && profile.militaryPeriodMonth === reference.militaryPeriodMonth
-    && hasExactMilitaryUnitMatch(reference, profile)
+    && hasExactDevreMatch(reference, profile)
   ));
   if (segment === 'residence') {
     return devreProfiles.filter(({ residenceCity }) => residenceCity === reference.residenceCity);
@@ -181,11 +186,7 @@ export function getMatchReasonBadges(
   reference: DiscoveryReferenceProfile,
   candidate: PublicProfile,
 ): string[] {
-  if (
-    candidate.militaryPeriodYear !== reference.militaryPeriodYear
-    || candidate.militaryPeriodMonth !== reference.militaryPeriodMonth
-    || !hasExactMilitaryUnitMatch(reference, candidate)
-  ) return [];
+  if (!hasExactDevreMatch(reference, candidate)) return [];
   const reasons: string[] = [];
   reasons.push('Aynı birlik');
   if (candidate.departureCity === reference.departureCity) {
