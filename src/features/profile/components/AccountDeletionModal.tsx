@@ -122,7 +122,7 @@ export function AccountDeletionModal({ visible, onClose }: AccountDeletionModalP
             onPress={close}
             style={{ alignItems: 'center', justifyContent: 'center', minHeight: 44, minWidth: 44 }}
           >
-            <Ionicons name="close" size={26} color={colors.text} />
+            <Ionicons name="close" size={26} color={colors.textPrimary} />
           </Pressable>
         </View>
 
@@ -131,7 +131,7 @@ export function AccountDeletionModal({ visible, onClose }: AccountDeletionModalP
             <View
               style={{
                 alignItems: 'center',
-                backgroundColor: colors.surfaceSubtle,
+                backgroundColor: colors.surfaceSecondary,
                 borderRadius: radii.md,
                 gap: spacing.md,
                 padding: spacing.xl,

@@ -13,7 +13,7 @@ interface AppTextProps extends TextProps {
 
 export function AppText({ children, variant = 'body', color = 'default', weight, style, ...props }: PropsWithChildren<AppTextProps>) {
   const { colors, typography } = useTheme();
-  const textColor = color === 'muted' ? colors.textMuted : color === 'danger' ? colors.danger : colors.text;
+  const textColor = color === 'muted' ? colors.textMuted : color === 'danger' ? colors.danger : colors.textPrimary;
 
   return (
     <Text

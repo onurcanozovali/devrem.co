@@ -25,6 +25,11 @@ export interface DiscoveryReferenceProfile {
   militaryUnit: string | null;
 }
 
+export type DiscoveryQuery = Pick<
+  DiscoveryReferenceProfile,
+  'militaryCity' | 'militaryPeriodMonth' | 'militaryPeriodYear'
+>;
+
 export type DiscoverySegment = 'all' | 'residence' | 'departure';
 
 export interface DiscoverySegmentOption {

@@ -42,7 +42,7 @@ export function PhoneLoginScreen() {
         <View
           style={{
             alignSelf: 'flex-start',
-            backgroundColor: colors.surfaceSubtle,
+            backgroundColor: colors.surfaceSecondary,
             borderRadius: radii.pill,
             paddingHorizontal: spacing.md,
             paddingVertical: spacing.sm,

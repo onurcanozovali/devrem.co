@@ -123,8 +123,8 @@ export function PreparationItemFormModal({
                       onPress={() => setCategory(option.id)}
                       style={({ pressed }) => ({
                         alignItems: 'center',
-                        backgroundColor: selected || pressed ? colors.surfaceSubtle : colors.surface,
-                        borderTopColor: colors.border,
+                        backgroundColor: selected ? colors.primarySubtle : pressed ? colors.surfaceSecondary : colors.inputBackground,
+                        borderTopColor: colors.divider,
                         borderTopWidth: index === 0 ? 0 : 1,
                         flexDirection: 'row',
                         gap: spacing.md,

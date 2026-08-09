@@ -61,7 +61,7 @@ export function SelectField<T extends SelectValue>({
         onPress={() => setIsOpen(true)}
         style={({ pressed }) => ({
           alignItems: 'center',
-          backgroundColor: pressed ? colors.surfaceSubtle : colors.surface,
+          backgroundColor: pressed ? colors.surfaceSecondary : colors.inputBackground,
           borderColor: error ? colors.danger : colors.border,
           borderRadius: radii.md,
           borderWidth: 1,
@@ -93,14 +93,14 @@ export function SelectField<T extends SelectValue>({
                 value={search}
                 onChangeText={setSearch}
                 placeholder={searchPlaceholder}
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.placeholder}
                 autoCorrect={false}
                 style={{
-                  backgroundColor: colors.surface,
+                  backgroundColor: colors.inputBackground,
                   borderColor: colors.border,
                   borderRadius: radii.md,
                   borderWidth: 1,
-                  color: colors.text,
+                  color: colors.textPrimary,
                   fontSize: typography.sizes.body,
                   minHeight: 50,
                   paddingHorizontal: spacing.md,
@@ -112,7 +112,7 @@ export function SelectField<T extends SelectValue>({
               data={filteredOptions}
               keyExtractor={(item) => String(item.value)}
               keyboardShouldPersistTaps="handled"
-              ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border }} />}
+              ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.divider }} />}
               ListEmptyComponent={<AppText color="muted" style={{ textAlign: 'center', padding: spacing.xl }}>Sonuç bulunamadı.</AppText>}
               renderItem={({ item }) => {
                 const isSelected = item.value === value;
@@ -125,7 +125,7 @@ export function SelectField<T extends SelectValue>({
                       close();
                     }}
                     style={({ pressed }) => ({
-                      backgroundColor: isSelected || pressed ? colors.surfaceSubtle : colors.background,
+                      backgroundColor: isSelected || pressed ? colors.primarySubtle : colors.background,
                       minHeight: 52,
                       justifyContent: 'center',
                       paddingHorizontal: spacing.md,

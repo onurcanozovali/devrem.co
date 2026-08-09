@@ -139,7 +139,7 @@ export function ProfileEditModal({ profile, visible, onClose, onSave }: ProfileE
         }}
         style={({ pressed }) => ({
           alignItems: 'center',
-          backgroundColor: selected || pressed ? colors.surfaceSubtle : colors.surface,
+          backgroundColor: selected ? colors.primarySubtle : pressed ? colors.surfaceSecondary : colors.inputBackground,
           borderColor: selected ? colors.primary : colors.border,
           borderRadius: radii.md,
           borderWidth: 1,
@@ -170,7 +170,7 @@ export function ProfileEditModal({ profile, visible, onClose, onSave }: ProfileE
             onPress={requestClose}
             style={{ alignItems: 'center', justifyContent: 'center', minHeight: 44, minWidth: 44 }}
           >
-            <Ionicons name="close" size={26} color={colors.text} />
+            <Ionicons name="close" size={26} color={colors.textPrimary} />
           </Pressable>
           <View style={{ flex: 1 }}>
             <AppText variant="title" weight="800">Profili düzenle</AppText>
@@ -238,7 +238,7 @@ export function ProfileEditModal({ profile, visible, onClose, onSave }: ProfileE
           />
         </View>
 
-        <View style={{ backgroundColor: colors.border, height: 1 }} />
+        <View style={{ backgroundColor: colors.divider, height: 1 }} />
 
         <View style={{ gap: spacing.lg }}>
           <AppText variant="subtitle" weight="800">Askerlik bilgileri</AppText>

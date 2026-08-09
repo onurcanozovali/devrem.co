@@ -11,7 +11,7 @@ interface ButtonProps extends Omit<PressableProps, 'children'> {
 
 export function Button({ label, loading = false, variant = 'primary', disabled, style, ...props }: ButtonProps) {
   const { colors, radii, spacing } = useTheme();
-  const labelColor = variant === 'secondary' ? colors.primary : colors.onPrimary;
+  const labelColor = variant === 'secondary' ? colors.primary : colors.textInverse;
 
   return (
     <Pressable
@@ -23,7 +23,7 @@ export function Button({ label, loading = false, variant = 'primary', disabled, 
         styles.base,
         {
           backgroundColor: variant === 'secondary'
-            ? state.pressed ? colors.surfaceSubtle : colors.surface
+            ? state.pressed ? colors.surfaceSecondary : colors.surfaceElevated
             : variant === 'danger'
               ? colors.danger
               : state.pressed ? colors.primaryPressed : colors.primary,

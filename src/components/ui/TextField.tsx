@@ -22,7 +22,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
       <View
         style={{
           alignItems: 'center',
-          backgroundColor: colors.surface,
+          backgroundColor: colors.inputBackground,
           borderColor: error ? colors.danger : colors.border,
           borderRadius: radii.md,
           borderWidth: 1,
@@ -35,10 +35,10 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
         <TextInput
           ref={ref}
           accessibilityLabel={label}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={colors.placeholder}
           {...props}
           style={[
-            { color: colors.text, flex: 1, fontSize: typography.sizes.body, paddingVertical: spacing.md },
+            { color: colors.textPrimary, flex: 1, fontSize: typography.sizes.body, paddingVertical: spacing.md },
             style,
           ]}
         />
