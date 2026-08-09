@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { memo } from 'react';
 
 import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -76,14 +77,14 @@ function RootNavigator() {
   );
 }
 
-function AppProviders() {
+function ThemedStatusBar() {
   const { resolvedScheme } = useTheme();
+  return <StatusBar animated style={resolvedScheme === 'dark' ? 'light' : 'dark'} />;
+}
+
+const DataProviders = memo(function DataProviders() {
   return (
     <AppErrorBoundary>
-      <StatusBar
-        animated
-        style={resolvedScheme === 'dark' ? 'light' : 'dark'}
-      />
       <AuthProvider>
         <ProfileProvider>
           <PreparationProvider>
@@ -93,12 +94,13 @@ function AppProviders() {
       </AuthProvider>
     </AppErrorBoundary>
   );
-}
+});
 
 export default function RootLayout() {
   return (
     <ThemeProvider>
-      <AppProviders />
+      <ThemedStatusBar />
+      <DataProviders />
     </ThemeProvider>
   );
 }

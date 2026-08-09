@@ -1,4 +1,5 @@
 import { File, Paths } from 'expo-file-system';
+import { writeAsStringAsync } from 'expo-file-system/legacy';
 
 import { parseThemeMode, type ThemeMode } from './themeMode';
 
@@ -17,11 +18,6 @@ export function readThemeModePreference(): ThemeMode {
   }
 }
 
-export function writeThemeModePreference(mode: ThemeMode): boolean {
-  try {
-    getPreferenceFile().write(mode);
-    return true;
-  } catch {
-    return false;
-  }
+export async function writeThemeModePreference(mode: ThemeMode): Promise<void> {
+  await writeAsStringAsync(getPreferenceFile().uri, mode);
 }

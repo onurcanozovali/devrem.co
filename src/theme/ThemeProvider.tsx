@@ -1,4 +1,4 @@
-import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type PropsWithChildren, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { Appearance, useColorScheme } from 'react-native';
 
 import { darkColors, lightColors, type ThemeColors } from './colors';
@@ -20,46 +20,61 @@ syncNativeAppearance(initialMode);
 interface ThemeContextValue {
   colorScheme: ResolvedTheme;
   colors: ThemeColors;
-  mode: ThemeMode;
   radii: typeof radii;
   resolvedScheme: ResolvedTheme;
-  setMode: (mode: ThemeMode) => boolean;
   spacing: typeof spacing;
   typography: typeof typography;
 }
 
+interface ThemeModeContextValue {
+  mode: ThemeMode;
+  setMode: (mode: ThemeMode) => void;
+}
+
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+const ThemeModeContext = createContext<ThemeModeContextValue | null>(null);
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>(initialMode);
+  const writeQueueRef = useRef(Promise.resolve());
   const resolvedScheme = resolveThemeMode(mode, systemScheme);
-  const setMode = useCallback((nextMode: ThemeMode): boolean => {
-    if (!writeThemeModePreference(nextMode)) return false;
-    syncNativeAppearance(nextMode);
+  const setMode = useCallback((nextMode: ThemeMode): void => {
     setModeState(nextMode);
-    return true;
+    syncNativeAppearance(nextMode);
+    writeQueueRef.current = writeQueueRef.current
+      .catch(() => undefined)
+      .then(() => writeThemeModePreference(nextMode))
+      .catch(() => undefined);
   }, []);
-  useEffect(() => syncNativeAppearance(mode), [mode]);
   const value = useMemo<ThemeContextValue>(
     () => ({
       colorScheme: resolvedScheme,
       colors: resolvedScheme === 'dark' ? darkColors : lightColors,
-      mode,
       radii,
       resolvedScheme,
-      setMode,
       spacing,
       typography,
     }),
-    [mode, resolvedScheme, setMode],
+    [resolvedScheme],
   );
+  const modeValue = useMemo<ThemeModeContextValue>(() => ({ mode, setMode }), [mode, setMode]);
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeModeContext.Provider value={modeValue}>
+      <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+    </ThemeModeContext.Provider>
+  );
 }
 
 export function useTheme(): ThemeContextValue {
   const context = useContext(ThemeContext);
   if (!context) throw new Error('useTheme must be used within ThemeProvider.');
+  return context;
+}
+
+export function useThemeMode(): ThemeModeContextValue {
+  const context = useContext(ThemeModeContext);
+  if (!context) throw new Error('useThemeMode must be used within ThemeProvider.');
   return context;
 }

@@ -7,7 +7,6 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { themeModeLabels, themeModes, type ThemeMode } from '@/theme/themeMode';
 
 interface ThemeSelectionModalProps {
-  error: string | null;
   onClose: () => void;
   onSelect: (mode: ThemeMode) => void;
   selectedMode: ThemeMode;
@@ -15,7 +14,6 @@ interface ThemeSelectionModalProps {
 }
 
 export function ThemeSelectionModal({
-  error,
   onClose,
   onSelect,
   selectedMode,
@@ -77,11 +75,6 @@ export function ThemeSelectionModal({
             })}
           </View>
 
-          {error ? (
-            <AppText color="danger" variant="caption" accessibilityLiveRegion="polite">
-              {error}
-            </AppText>
-          ) : null}
         </View>
       </SafeAreaView>
     </Modal>

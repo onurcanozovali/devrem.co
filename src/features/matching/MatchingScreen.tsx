@@ -1,4 +1,5 @@
 import { router, type Href } from 'expo-router';
+import { useCallback } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -47,9 +48,16 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 	const periodLabel = getMilitaryPeriodLabel(profile.militaryPeriodYear, profile.militaryPeriodMonth);
 	const destinationLabel = getProvinceName(profile.militaryCity);
 
-	const openProfile = (userId: string) => {
+	const openProfile = useCallback((userId: string) => {
 		router.push(`/devre/${userId}` as Href);
-	};
+	}, []);
+	const renderProfile = useCallback(({ item }: { item: PublicProfile }) => (
+		<DiscoveryProfileRow
+			profile={item}
+			reference={reference}
+			onPress={openProfile}
+		/>
+	), [openProfile, reference]);
 
 	return (
 		<SafeAreaView style={{ backgroundColor: colors.background, flex: 1 }} edges={['top', 'left', 'right']}>
@@ -106,13 +114,7 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 				<FlatList<PublicProfile>
 					data={profiles}
 					keyExtractor={(item) => item.userId}
-					renderItem={({ item }) => (
-						<DiscoveryProfileRow
-							profile={item}
-							reference={reference}
-							onPress={openProfile}
-						/>
-					)}
+					renderItem={renderProfile}
 					ItemSeparatorComponent={() => <View style={{ backgroundColor: colors.divider, height: 1 }} />}
 					ListEmptyComponent={(
 						<EmptyState

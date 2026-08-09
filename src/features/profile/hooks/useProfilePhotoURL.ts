@@ -8,6 +8,7 @@ export function useProfilePhotoURL(
   version: Date | null,
 ): string | null {
   const [photoURL, setPhotoURL] = useState<string | null>(null);
+  const versionTimestamp = version?.getTime() ?? 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -20,11 +21,11 @@ export function useProfilePhotoURL(
       };
     }
 
-    void resolveProfilePhotoURL(uid, photoPath)
+    void resolveProfilePhotoURL(uid, photoPath, versionTimestamp)
       .then((url) => {
         if (!cancelled) {
           const separator = url?.includes('?') ? '&' : '?';
-          setPhotoURL(url ? `${url}${separator}v=${version?.getTime() ?? 0}` : null);
+          setPhotoURL(url ? `${url}${separator}v=${versionTimestamp}` : null);
         }
       })
       .catch(() => {
@@ -34,7 +35,7 @@ export function useProfilePhotoURL(
     return () => {
       cancelled = true;
     };
-  }, [photoPath, uid, version]);
+  }, [photoPath, uid, versionTimestamp]);
 
   return photoURL;
 }
