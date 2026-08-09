@@ -12,8 +12,10 @@ import { getProvinceName } from '@/data/turkeyProvinces';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { mapAuthError } from '@/features/auth/services/authErrors';
 import { useTheme } from '@/theme/ThemeProvider';
+import { themeModeLabels, type ThemeMode } from '@/theme/themeMode';
 import { ProfileEditModal } from './components/ProfileEditModal';
 import { AccountDeletionModal } from './components/AccountDeletionModal';
+import { ThemeSelectionModal } from './components/ThemeSelectionModal';
 import { useProfile } from './hooks/useProfile';
 import { useProfilePhotoURL } from './hooks/useProfilePhotoURL';
 import { militaryTypeLabels, monthLabels } from './profileOptions';
@@ -34,10 +36,12 @@ function ProfileDetail({ label, value }: { label: string; value: string }) {
 export function ProfileScreen() {
   const { logout } = useAuth();
   const { profile, refreshProfile, removeProfilePhoto, replaceProfilePhoto, updateProfile } = useProfile();
-  const { colors, radii, spacing } = useTheme();
+  const { colors, mode, radii, setMode, spacing } = useTheme();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isChoosingTheme, setIsChoosingTheme] = useState(false);
+  const [themeError, setThemeError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isPhotoWorking, setIsPhotoWorking] = useState(false);
@@ -138,6 +142,15 @@ export function ProfileScreen() {
     ]);
   };
 
+  const handleThemeSelection = (nextMode: ThemeMode) => {
+    if (!setMode(nextMode)) {
+      setThemeError('Görünüm tercihi bu cihazda kaydedilemedi. Lütfen tekrar dene.');
+      return;
+    }
+    setThemeError(null);
+    setIsChoosingTheme(false);
+  };
+
   if (!profile) {
     return (
       <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}>
@@ -164,7 +177,7 @@ export function ProfileScreen() {
           onPress={() => setIsEditing(true)}
           style={({ pressed }) => ({
             alignItems: 'center',
-            backgroundColor: pressed ? colors.surfaceSubtle : colors.surface,
+            backgroundColor: pressed ? colors.surfaceSecondary : colors.surfaceElevated,
             borderColor: colors.border,
             borderRadius: radii.md,
             borderWidth: 1,
@@ -239,18 +252,46 @@ export function ProfileScreen() {
       </Card>
 
       <Card style={{ gap: spacing.md }}>
+        <AppText variant="subtitle" weight="700">Ayarlar</AppText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Görünüm: ${themeModeLabels[mode]}`}
+          accessibilityHint="Uygulama görünümünü değiştirmek için dokunun"
+          onPress={() => {
+            setThemeError(null);
+            setIsChoosingTheme(true);
+          }}
+          style={({ pressed }) => ({
+            alignItems: 'center',
+            backgroundColor: pressed ? colors.surfaceSecondary : colors.surfaceElevated,
+            borderRadius: radii.sm,
+            flexDirection: 'row',
+            gap: spacing.md,
+            minHeight: 56,
+          })}
+        >
+          <Ionicons name="contrast-outline" size={22} color={colors.primary} />
+          <View style={{ flex: 1, gap: spacing.xs }}>
+            <AppText weight="700">Görünüm</AppText>
+            <AppText color="muted" variant="caption">{themeModeLabels[mode]}</AppText>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </Pressable>
+      </Card>
+
+      <Card style={{ gap: spacing.md }}>
         <AppText variant="subtitle" weight="700">Hesap</AppText>
         <AppText color="muted">Telefon numaran Firebase Authentication tarafından yönetilir ve profil belgesine kopyalanmaz.</AppText>
         {error ? <AppText color="danger" variant="caption" accessibilityLiveRegion="polite">{error}</AppText> : null}
         <Button label="Çıkış yap" loading={isLoggingOut} onPress={handleLogout} />
-        <View style={{ backgroundColor: colors.border, height: 1, marginVertical: spacing.sm }} />
+        <View style={{ backgroundColor: colors.divider, height: 1, marginVertical: spacing.sm }} />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Hesabı kalıcı olarak sil"
           onPress={() => setIsDeletingAccount(true)}
           style={({ pressed }) => ({
             alignItems: 'center',
-            backgroundColor: pressed ? colors.surfaceSubtle : 'transparent',
+            backgroundColor: pressed ? colors.surfaceSecondary : 'transparent',
             borderRadius: radii.sm,
             flexDirection: 'row',
             gap: spacing.sm,
@@ -278,6 +319,17 @@ export function ProfileScreen() {
           onClose={() => setIsDeletingAccount(false)}
         />
       ) : null}
+
+      <ThemeSelectionModal
+        error={themeError}
+        onClose={() => {
+          setThemeError(null);
+          setIsChoosingTheme(false);
+        }}
+        onSelect={handleThemeSelection}
+        selectedMode={mode}
+        visible={isChoosingTheme}
+      />
     </ScreenContainer>
   );
 }

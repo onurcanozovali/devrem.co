@@ -251,7 +251,7 @@ export function OnboardingScreen() {
         }}
         style={({ pressed }) => ({
           alignItems: 'center',
-          backgroundColor: selected || pressed ? colors.surfaceSubtle : colors.surface,
+          backgroundColor: selected ? colors.primarySubtle : pressed ? colors.surfaceSecondary : colors.inputBackground,
           borderColor: selected ? colors.primary : colors.border,
           borderRadius: radii.md,
           borderWidth: 1,
@@ -276,7 +276,7 @@ export function OnboardingScreen() {
     <ScreenContainer contentContainerStyle={{ gap: spacing.xl, paddingBottom: spacing.xl }}>
       <View style={{ gap: spacing.md, paddingTop: spacing.sm }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radii.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
+          <View style={{ backgroundColor: colors.primarySubtle, borderRadius: radii.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}>
             <AppText weight="800" style={{ color: colors.primary }}>DEVREM</AppText>
           </View>
           <AppText color="muted" variant="caption">Adım {step + 1} / {steps.length}</AppText>

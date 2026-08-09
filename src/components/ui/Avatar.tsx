@@ -29,7 +29,7 @@ export function Avatar({
       accessibilityRole="image"
       style={{
         alignItems: 'center',
-        backgroundColor: colors.surfaceSubtle,
+        backgroundColor: colors.primarySubtle,
         borderColor: colors.border,
         borderRadius: size / 2,
         borderWidth: 1,
@@ -57,7 +57,7 @@ export function Avatar({
         <View
           style={{
             alignItems: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.42)',
+            backgroundColor: colors.overlay,
             bottom: 0,
             justifyContent: 'center',
             left: 0,
@@ -66,7 +66,7 @@ export function Avatar({
             top: 0,
           }}
         >
-          <ActivityIndicator color="#FFFFFF" />
+          <ActivityIndicator color={colors.overlayContent} />
         </View>
       ) : null}
     </View>

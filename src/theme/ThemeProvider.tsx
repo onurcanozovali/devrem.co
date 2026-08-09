@@ -1,13 +1,29 @@
-import { createContext, type PropsWithChildren, useContext, useMemo } from 'react';
-import { useColorScheme } from 'react-native';
+import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Appearance, useColorScheme } from 'react-native';
 
 import { darkColors, lightColors, type ThemeColors } from './colors';
+import { resolveThemeMode, type ResolvedTheme, type ThemeMode } from './themeMode';
+import { readThemeModePreference, writeThemeModePreference } from './themePreference';
 import { radii, spacing, typography } from './tokens';
 
+function syncNativeAppearance(mode: ThemeMode): void {
+  try {
+    Appearance.setColorScheme(mode === 'system' ? 'unspecified' : mode);
+  } catch {
+    // The semantic theme remains usable if native appearance is unavailable.
+  }
+}
+
+const initialMode = readThemeModePreference();
+syncNativeAppearance(initialMode);
+
 interface ThemeContextValue {
-  colorScheme: 'light' | 'dark';
+  colorScheme: ResolvedTheme;
   colors: ThemeColors;
+  mode: ThemeMode;
   radii: typeof radii;
+  resolvedScheme: ResolvedTheme;
+  setMode: (mode: ThemeMode) => boolean;
   spacing: typeof spacing;
   typography: typeof typography;
 }
@@ -16,10 +32,27 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme();
-  const colorScheme = systemScheme === 'dark' ? 'dark' : 'light';
+  const [mode, setModeState] = useState<ThemeMode>(initialMode);
+  const resolvedScheme = resolveThemeMode(mode, systemScheme);
+  const setMode = useCallback((nextMode: ThemeMode): boolean => {
+    if (!writeThemeModePreference(nextMode)) return false;
+    syncNativeAppearance(nextMode);
+    setModeState(nextMode);
+    return true;
+  }, []);
+  useEffect(() => syncNativeAppearance(mode), [mode]);
   const value = useMemo<ThemeContextValue>(
-    () => ({ colorScheme, colors: colorScheme === 'dark' ? darkColors : lightColors, radii, spacing, typography }),
-    [colorScheme],
+    () => ({
+      colorScheme: resolvedScheme,
+      colors: resolvedScheme === 'dark' ? darkColors : lightColors,
+      mode,
+      radii,
+      resolvedScheme,
+      setMode,
+      spacing,
+      typography,
+    }),
+    [mode, resolvedScheme, setMode],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

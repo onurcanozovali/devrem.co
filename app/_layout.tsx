@@ -13,7 +13,7 @@ import { PreparationProvider } from '@/features/preparation/PreparationProvider'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 function RootNavigator() {
-  const { colorScheme, colors } = useTheme();
+  const { colors } = useTheme();
   const { status, initializationError } = useAuth();
   const { status: profileStatus, error: profileError, refreshProfile } = useProfile();
 
@@ -55,42 +55,50 @@ function RootNavigator() {
   }
 
   return (
-    <>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          contentStyle: { backgroundColor: colors.background },
-          headerShown: false,
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Protected guard={status === 'unauthenticated'}>
-          <Stack.Screen name="(auth)" />
-        </Stack.Protected>
-        <Stack.Protected guard={status === 'authenticated' && (profileStatus === 'missing' || profileStatus === 'incomplete')}>
-          <Stack.Screen name="onboarding" />
-        </Stack.Protected>
-        <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete'}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="devre/[userId]" />
-        </Stack.Protected>
-      </Stack>
-    </>
+    <Stack
+      screenOptions={{
+        contentStyle: { backgroundColor: colors.background },
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Protected guard={status === 'unauthenticated'}>
+        <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === 'authenticated' && (profileStatus === 'missing' || profileStatus === 'incomplete')}>
+        <Stack.Screen name="onboarding" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete'}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="devre/[userId]" />
+      </Stack.Protected>
+    </Stack>
+  );
+}
+
+function AppProviders() {
+  const { resolvedScheme } = useTheme();
+  return (
+    <AppErrorBoundary>
+      <StatusBar
+        animated
+        style={resolvedScheme === 'dark' ? 'light' : 'dark'}
+      />
+      <AuthProvider>
+        <ProfileProvider>
+          <PreparationProvider>
+            <RootNavigator />
+          </PreparationProvider>
+        </ProfileProvider>
+      </AuthProvider>
+    </AppErrorBoundary>
   );
 }
 
 export default function RootLayout() {
   return (
-    <AppErrorBoundary>
-      <ThemeProvider>
-        <AuthProvider>
-          <ProfileProvider>
-            <PreparationProvider>
-              <RootNavigator />
-            </PreparationProvider>
-          </ProfileProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </AppErrorBoundary>
+    <ThemeProvider>
+      <AppProviders />
+    </ThemeProvider>
   );
 }

@@ -148,7 +148,7 @@ export function HomeScreen() {
 							text: `%${preparationSummary.percentage}`,
 						}}
 						style={{
-							backgroundColor: colors.surfaceSubtle,
+							backgroundColor: colors.surfaceSecondary,
 							borderRadius: radii.pill,
 							height: 10,
 							overflow: 'hidden',
@@ -219,10 +219,10 @@ function CountdownHeadline({
 	if (state === 'future' && daysRemaining !== null) {
 		return (
 			<View style={{ gap: spacing.xs }}>
-				<AppText weight="700" style={{ color: colors.onPrimary }}>Teslime</AppText>
+				<AppText weight="700" style={{ color: colors.textInverse }}>Teslime</AppText>
 				<View style={{ alignItems: 'baseline', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-					<AppText variant="display" weight="800" style={{ color: colors.onPrimary }}>{daysRemaining}</AppText>
-					<AppText variant="subtitle" weight="800" style={{ color: colors.onPrimary }}>gün kaldı</AppText>
+					<AppText variant="display" weight="800" style={{ color: colors.textInverse }}>{daysRemaining}</AppText>
+					<AppText variant="subtitle" weight="800" style={{ color: colors.textInverse }}>gün kaldı</AppText>
 				</View>
 			</View>
 		);
@@ -233,15 +233,15 @@ function CountdownHeadline({
 		: state === 'past'
 			? 'Teslim tarihin geçmiş görünüyor'
 			: 'Teslim tarihi görüntülenemedi';
-	return <AppText variant="title" weight="800" style={{ color: colors.onPrimary }}>{label}</AppText>;
+	return <AppText variant="title" weight="800" style={{ color: colors.textInverse }}>{label}</AppText>;
 }
 
 function HeroDetail({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
 	const { colors, spacing } = useTheme();
 	return (
 		<View style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.sm }}>
-			<Ionicons name={icon} size={18} color={colors.onPrimary} />
-			<AppText variant="caption" style={{ color: colors.onPrimary, flex: 1 }}>{label}</AppText>
+			<Ionicons name={icon} size={18} color={colors.textInverse} />
+			<AppText variant="caption" style={{ color: colors.textInverse, flex: 1 }}>{label}</AppText>
 		</View>
 	);
 }
@@ -249,7 +249,7 @@ function HeroDetail({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; lab
 function DetailBlock({ label, value }: { label: string; value: string }) {
 	const { colors, radii, spacing } = useTheme();
 	return (
-		<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radii.md, flex: 1, gap: spacing.xs, padding: spacing.md }}>
+		<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radii.md, flex: 1, gap: spacing.xs, padding: spacing.md }}>
 			<AppText color="muted" variant="caption">{label}</AppText>
 			<AppText weight="700">{value}</AppText>
 		</View>

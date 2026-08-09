@@ -20,11 +20,11 @@ function DiscoverySkeleton() {
 		<View accessibilityRole="progressbar" accessibilityLabel="Devreler yükleniyor" style={{ gap: spacing.md }}>
 			{[0, 1, 2, 3].map((item) => (
 				<View key={item} style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.md, minHeight: 92 }}>
-					<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 32, height: 64, width: 64 }} />
+					<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 32, height: 64, width: 64 }} />
 					<View style={{ flex: 1, gap: spacing.sm }}>
-						<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 4, height: 16, width: '38%' }} />
-						<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 4, height: 14, width: '72%' }} />
-						<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 4, height: 12, width: '54%' }} />
+						<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 4, height: 16, width: '38%' }} />
+						<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 4, height: 14, width: '72%' }} />
+						<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 4, height: 12, width: '54%' }} />
 					</View>
 				</View>
 			))}
@@ -84,7 +84,7 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 									paddingHorizontal: spacing.md,
 								})}
 							>
-								<AppText style={{ color: selected ? colors.onPrimary : colors.text }} variant="caption" weight="800">
+								<AppText style={{ color: selected ? colors.textInverse : colors.textPrimary }} variant="caption" weight="800">
 									{segment.label}
 								</AppText>
 							</Pressable>
@@ -113,7 +113,7 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 							onPress={openProfile}
 						/>
 					)}
-					ItemSeparatorComponent={() => <View style={{ backgroundColor: colors.border, height: 1 }} />}
+					ItemSeparatorComponent={() => <View style={{ backgroundColor: colors.divider, height: 1 }} />}
 					ListEmptyComponent={(
 						<EmptyState
 							title="Henüz eşleşme yok"

@@ -119,7 +119,7 @@ export function OtpVerificationScreen() {
                   borderColor: error ? colors.danger : colors.border,
                   borderRadius: radii.md,
                   borderWidth: 1,
-                  color: colors.text,
+                  color: colors.textPrimary,
                   flex: 1,
                   fontSize: typography.sizes.subtitle,
                   fontWeight: '700',

@@ -178,8 +178,8 @@ export function PreparationScreen() {
               paddingHorizontal: spacing.md,
             })}
           >
-            <Ionicons name="add" size={21} color={colors.onPrimary} />
-            <AppText weight="700" style={{ color: colors.onPrimary }}>Görev ekle</AppText>
+            <Ionicons name="add" size={21} color={colors.textInverse} />
+            <AppText weight="700" style={{ color: colors.textInverse }}>Görev ekle</AppText>
           </Pressable>
         </View>
 
@@ -194,7 +194,7 @@ export function PreparationScreen() {
           <View
             accessibilityRole="progressbar"
             accessibilityValue={{ min: 0, max: 100, now: summary.percentage, text: `%${summary.percentage}` }}
-            style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radii.pill, height: 9, marginTop: spacing.md, overflow: 'hidden' }}
+            style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radii.pill, height: 9, marginTop: spacing.md, overflow: 'hidden' }}
           >
             <View style={{ backgroundColor: colors.primary, borderRadius: radii.pill, height: '100%', width: `${summary.percentage}%` }} />
           </View>
@@ -206,7 +206,7 @@ export function PreparationScreen() {
         {!state?.longPressHintDismissed && !summary.isEmpty ? (
           <View style={{
             alignItems: 'center',
-            backgroundColor: colors.surfaceSubtle,
+            backgroundColor: colors.surfaceSecondary,
             borderRadius: radii.md,
             flexDirection: 'row',
             gap: spacing.sm,
@@ -272,7 +272,7 @@ export function PreparationScreen() {
                     })}
                     style={({ pressed }) => ({
                       alignItems: 'center',
-                      backgroundColor: pressed ? colors.surfaceSubtle : colors.surface,
+                      backgroundColor: pressed ? colors.surfaceSecondary : colors.surfaceElevated,
                       flexDirection: 'row',
                       gap: spacing.md,
                       minHeight: 64,
@@ -287,9 +287,9 @@ export function PreparationScreen() {
                     <Ionicons name={collapsed ? 'chevron-down' : 'chevron-up'} size={20} color={colors.textMuted} />
                   </Pressable>
                   {!collapsed ? (
-                    <View style={{ borderTopColor: colors.border, borderTopWidth: 1 }}>
+                    <View style={{ borderTopColor: colors.divider, borderTopWidth: 1 }}>
                       {categoryItems.map((item, index) => (
-                        <View key={item.id} style={index > 0 ? { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth } : undefined}>
+                        <View key={item.id} style={index > 0 ? { borderTopColor: colors.divider, borderTopWidth: StyleSheet.hairlineWidth } : undefined}>
                           <PreparationItemRow
                             item={item}
                             actionsActive={actionsItemId === item.id}

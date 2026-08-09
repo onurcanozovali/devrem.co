@@ -8,7 +8,7 @@ export function Card({ children, style, ...props }: PropsWithChildren<ViewProps>
   return (
     <View
       {...props}
-      style={[{ backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, padding: spacing.lg }, style]}
+      style={[{ backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, padding: spacing.lg }, style]}
     >
       {children}
     </View>
