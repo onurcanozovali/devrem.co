@@ -8,8 +8,10 @@
   },
   "scripts": {
     "backfill:public-profiles": "pnpm run build && node lib/runPublicProfileBackfill.js",
+    "clear:discovery-seed": "pnpm run build && node lib/runDiscoverySeed.js clear",
     "build": "tsc",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "seed:discovery": "pnpm run build && node lib/runDiscoverySeed.js seed"
   },
   "dependencies": {
     "firebase-admin": "^13.4.0",

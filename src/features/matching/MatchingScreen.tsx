@@ -1,7 +1,5 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, RefreshControl, SectionList, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/common/EmptyState';
@@ -11,34 +9,10 @@ import { useProfile } from '@/features/profile/hooks/useProfile';
 import { getMilitaryPeriodLabel } from '@/features/profile/profileOptions';
 import type { UserProfile } from '@/features/profile/types/profile';
 import { useTheme } from '@/theme/ThemeProvider';
-import { DiscoveryFilterModal } from './components/DiscoveryFilterModal';
 import { DiscoveryProfileRow } from './components/DiscoveryProfileRow';
 import { useDiscovery } from './hooks/useDiscovery';
+import { getDiscoveryEmptyStateCopy } from './services/discoveryDomain';
 import type { PublicProfile } from './types/discovery';
-
-function FilterChip({ label, onPress }: { label: string; onPress: () => void }) {
-	const { colors, radii, spacing } = useTheme();
-	return (
-		<Pressable
-			accessibilityRole="button"
-			onPress={onPress}
-			style={({ pressed }) => ({
-				alignItems: 'center',
-				backgroundColor: pressed ? colors.surfaceSubtle : colors.surface,
-				borderColor: colors.border,
-				borderRadius: radii.pill,
-				borderWidth: 1,
-				flexDirection: 'row',
-				gap: spacing.xs,
-				minHeight: 40,
-				paddingHorizontal: spacing.md,
-			})}
-		>
-			<AppText variant="caption" weight="700" numberOfLines={1}>{label}</AppText>
-			<Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-		</Pressable>
-	);
-}
 
 function DiscoverySkeleton() {
 	const { colors, spacing } = useTheme();
@@ -59,20 +33,19 @@ function DiscoverySkeleton() {
 }
 
 function DiscoveryContent({ profile }: { profile: UserProfile }) {
-	const { colors, spacing } = useTheme();
-	const { error, filters, profiles, retry, setFilters, status } = useDiscovery(profile);
-	const [filtersVisible, setFiltersVisible] = useState(false);
-	const sections = useMemo(() => {
-		const sameDestination = profiles.filter((candidate) => candidate.militaryCity === profile.militaryCity);
-		const otherProfiles = profiles.filter((candidate) => candidate.militaryCity !== profile.militaryCity);
-		return [
-			...(sameDestination.length > 0 ? [{ title: 'Aynı Yere Gidenler', data: sameDestination }] : []),
-			...(otherProfiles.length > 0 ? [{ title: 'Senin Dönemindeki Diğer Devreler', data: otherProfiles }] : []),
-		];
-	}, [profile.militaryCity, profiles]);
-	const periodLabel = getMilitaryPeriodLabel(filters.militaryPeriodYear, filters.militaryPeriodMonth);
-	const destinationLabel = filters.militaryCity === null ? 'Tüm varış şehirleri' : getProvinceName(filters.militaryCity);
-	const departureLabel = filters.departureCity === null ? 'Tüm çıkış şehirleri' : getProvinceName(filters.departureCity);
+	const { colors, radii, spacing } = useTheme();
+	const {
+		error,
+		profiles,
+		reference,
+		retry,
+		segments,
+		selectedSegment,
+		setSelectedSegment,
+		status,
+	} = useDiscovery(profile);
+	const periodLabel = getMilitaryPeriodLabel(profile.militaryPeriodYear, profile.militaryPeriodMonth);
+	const destinationLabel = getProvinceName(profile.militaryCity);
 
 	const openProfile = (userId: string) => {
 		router.push(`/devre/${userId}` as Href);
@@ -80,33 +53,44 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 
 	return (
 		<SafeAreaView style={{ backgroundColor: colors.background, flex: 1 }} edges={['top', 'left', 'right']}>
-			<View style={{ gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.md }}>
-				<View style={{ gap: spacing.xs }}>
+			<View style={{ gap: spacing.md, paddingTop: spacing.md }}>
+				<View style={{ gap: spacing.xs, paddingHorizontal: spacing.lg }}>
 					<AppText variant="display" weight="900">Devreni Bul</AppText>
-					<AppText color="muted">Seninle aynı dönemde gidecek kişileri keşfet.</AppText>
+					<AppText color="muted">Seninle aynı dönemde ve aynı yere gidecek kişileri keşfet.</AppText>
+					<AppText weight="800">{periodLabel} · {destinationLabel}</AppText>
 				</View>
-				<View style={{ flexDirection: 'row', gap: spacing.sm }}>
-					<FilterChip label={periodLabel} onPress={() => setFiltersVisible(true)} />
-					<Pressable
-						accessibilityRole="button"
-						accessibilityLabel="Keşif filtrelerini aç"
-						onPress={() => setFiltersVisible(true)}
-						style={({ pressed }) => ({
-							alignItems: 'center',
-							backgroundColor: pressed ? colors.surfaceSubtle : colors.primary,
-							borderRadius: 20,
-							height: 40,
-							justifyContent: 'center',
-							width: 40,
-						})}
-					>
-						<Ionicons name="options-outline" size={20} color={colors.onPrimary} />
-					</Pressable>
-				</View>
-				<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-					<FilterChip label={destinationLabel} onPress={() => setFiltersVisible(true)} />
-					<FilterChip label={departureLabel} onPress={() => setFiltersVisible(true)} />
-				</View>
+				<ScrollView
+					horizontal
+					showsHorizontalScrollIndicator={false}
+					contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg }}
+				>
+					{segments.map((segment) => {
+						const selected = segment.id === selectedSegment;
+						return (
+							<Pressable
+								key={segment.id}
+								accessibilityRole="button"
+								accessibilityState={{ selected }}
+								onPress={() => setSelectedSegment(segment.id)}
+								style={({ pressed }) => ({
+									alignItems: 'center',
+									backgroundColor: selected ? colors.primary : colors.surface,
+									borderColor: selected ? colors.primary : colors.border,
+									borderRadius: radii.pill,
+									borderWidth: 1,
+									justifyContent: 'center',
+									minHeight: 44,
+									opacity: pressed ? 0.8 : 1,
+									paddingHorizontal: spacing.md,
+								})}
+							>
+								<AppText style={{ color: selected ? colors.onPrimary : colors.text }} variant="caption" weight="800">
+									{segment.label}
+								</AppText>
+							</Pressable>
+						);
+					})}
+				</ScrollView>
 			</View>
 
 			{status === 'loading' ? (
@@ -119,44 +103,31 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 					onAction={retry}
 				/>
 			) : (
-				<SectionList<PublicProfile>
-					sections={sections}
+				<FlatList<PublicProfile>
+					data={profiles}
 					keyExtractor={(item) => item.userId}
-					renderItem={({ item }) => <DiscoveryProfileRow profile={item} onPress={openProfile} />}
-					renderSectionHeader={({ section }) => (
-						<View style={{ backgroundColor: colors.background, paddingTop: spacing.lg, paddingBottom: spacing.xs }}>
-							<AppText variant="subtitle" weight="800">{section.title}</AppText>
-						</View>
+					renderItem={({ item }) => (
+						<DiscoveryProfileRow
+							profile={item}
+							reference={reference}
+							onPress={openProfile}
+						/>
 					)}
 					ItemSeparatorComponent={() => <View style={{ backgroundColor: colors.border, height: 1 }} />}
 					ListEmptyComponent={(
 						<EmptyState
 							title="Henüz eşleşme yok"
-							description="Bu filtrelerle eşleşen bir devre bulunamadı. Şehir filtrelerini genişleterek tekrar deneyebilirsin."
-							actionLabel="Filtreleri genişlet"
-							onAction={() => setFilters({ ...filters, militaryCity: null, departureCity: null })}
+							description={getDiscoveryEmptyStateCopy(selectedSegment)}
 						/>
 					)}
-					contentContainerStyle={{ flexGrow: 1, paddingHorizontal: spacing.lg, paddingBottom: spacing.xl }}
+					contentContainerStyle={{ flexGrow: 1, paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, paddingTop: spacing.sm }}
 					refreshControl={<RefreshControl refreshing={false} onRefresh={retry} tintColor={colors.primary} />}
-					stickySectionHeadersEnabled={false}
 					initialNumToRender={8}
 					maxToRenderPerBatch={8}
 					windowSize={7}
 				/>
 			)}
 
-			{filtersVisible ? (
-				<DiscoveryFilterModal
-					filters={filters}
-					profile={profile}
-					onClose={() => setFiltersVisible(false)}
-					onApply={(nextFilters) => {
-						setFiltersVisible(false);
-						setFilters(nextFilters);
-					}}
-				/>
-			) : null}
 		</SafeAreaView>
 	);
 }

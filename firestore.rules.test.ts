@@ -57,6 +57,7 @@ async function seedPublicProfile(uid: string, year: number, month: number) {
   await environment.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), 'publicProfiles', uid), {
       firstName: 'Onur',
+      residenceCity: 34,
       departureCity: 34,
       militaryCity: 6,
       militaryType: 'standard',
@@ -145,6 +146,7 @@ test('authenticated users may browse public projections but unauthenticated user
     collection(authenticatedDatabase, 'publicProfiles'),
     where('militaryPeriodYear', '==', 2027),
     where('militaryPeriodMonth', '==', 2),
+    where('militaryCity', '==', 6),
   )));
   assert.equal(results.size, 1);
 

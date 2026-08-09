@@ -1,5 +1,6 @@
 export interface PublicProfileProjection {
   firstName: string;
+  residenceCity: number;
   departureCity: number;
   militaryCity: number;
   militaryPeriodYear: number;
@@ -38,6 +39,7 @@ export function createPublicProfileProjection(
   if (
     firstName.length < 2
     || firstName.length > 50
+    || !isProvinceCode(value.residenceCity)
     || !isProvinceCode(value.departureCity)
     || !isProvinceCode(value.militaryCity)
     || typeof value.militaryPeriodYear !== 'number'
@@ -55,6 +57,7 @@ export function createPublicProfileProjection(
 
   return {
     firstName,
+    residenceCity: value.residenceCity,
     departureCity: value.departureCity,
     militaryCity: value.militaryCity,
     militaryPeriodYear: value.militaryPeriodYear,

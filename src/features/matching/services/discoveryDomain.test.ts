@@ -5,14 +5,18 @@ import test from 'node:test';
 
 import type { PublicProfile } from '../types/discovery';
 import {
+  filterPublicProfilesBySegment,
   filterAndRankPublicProfiles,
+  getDiscoveryEmptyStateCopy,
   getDiscoveryRelevanceScore,
-  isDiscoveryPeriodSelectable,
+  getDiscoverySegmentOptions,
+  getMatchReasonBadges,
   parsePublicProfileData,
 } from './discoveryDomain';
 
 const reference = {
   userId: 'current-user',
+  residenceCity: 55 as const,
   departureCity: 6 as const,
   militaryCity: 34 as const,
   militaryPeriodYear: 2027,
@@ -24,6 +28,7 @@ function createProfile(overrides: Partial<PublicProfile> = {}): PublicProfile {
   return {
     userId: 'candidate-1',
     firstName: 'Mehmet',
+    residenceCity: 35,
     departureCity: 35,
     militaryCity: 34,
     militaryPeriodYear: 2027,
@@ -45,42 +50,73 @@ test('public projection accepts only discovery-safe fields', () => {
   assert.equal(parsePublicProfileData(userId, { ...document, phoneNumber: '+905000000000' }), null);
 });
 
-test('relevance requires the same period and favors destination, known unit, then departure', () => {
+test('base discovery requires the same period and destination and excludes the current user', () => {
+  const candidates = [
+    createProfile({ userId: 'current-user' }),
+    createProfile({ userId: 'eligible' }),
+    createProfile({ userId: 'different-destination', militaryCity: 16 }),
+    createProfile({ userId: 'different-period', militaryPeriodMonth: 3 }),
+  ];
+  assert.deepEqual(
+    filterAndRankPublicProfiles(candidates, reference).map(({ userId }) => userId),
+    ['eligible'],
+  );
+});
+
+test('same unit ranks above same departure, which ranks above residence-only', () => {
   assert.equal(getDiscoveryRelevanceScore(reference, createProfile({ militaryPeriodMonth: 3 })), -1);
-  assert.equal(getDiscoveryRelevanceScore(reference, createProfile()), 100);
-  assert.equal(getDiscoveryRelevanceScore(reference, createProfile({
-    departureCity: 6,
-    militaryUnit: ' 1.   PİYADE tugayı ',
-  })), 190);
+  const profiles = filterAndRankPublicProfiles([
+    createProfile({ userId: 'residence', residenceCity: 55 }),
+    createProfile({ userId: 'departure', departureCity: 6 }),
+    createProfile({ userId: 'unit', militaryUnit: ' 1.   PİYADE tugayı ' }),
+    createProfile({ userId: 'other' }),
+  ], reference);
+  assert.deepEqual(profiles.map(({ userId }) => userId), ['unit', 'departure', 'residence', 'other']);
 });
 
 test('a missing unit never creates a unit match', () => {
   assert.equal(getDiscoveryRelevanceScore(
     { ...reference, militaryUnit: null },
     createProfile({ militaryUnit: null }),
-  ), 100);
+  ), 0);
 });
 
-test('filtering excludes the current user and applies compact city filters', () => {
-  const candidates = [
-    createProfile({ userId: 'current-user' }),
-    createProfile({ userId: 'same-cities', departureCity: 6 }),
-    createProfile({ userId: 'other-departure', departureCity: 7 }),
-    createProfile({ userId: 'other-destination', militaryCity: 16 }),
+test('quick segments filter the eligible base group', () => {
+  const profiles = [
+    createProfile({ userId: 'all-signals', residenceCity: 55, departureCity: 6 }),
+    createProfile({ userId: 'residence', residenceCity: 55, departureCity: 7 }),
+    createProfile({ userId: 'departure', residenceCity: 35, departureCity: 6 }),
+    createProfile({ userId: 'other' }),
   ];
-  const results = filterAndRankPublicProfiles(candidates, reference, {
-    militaryPeriodYear: 2027,
-    militaryPeriodMonth: 2,
-    militaryCity: 34,
-    departureCity: 6,
-  });
-  assert.deepEqual(results.map(({ userId }) => userId), ['same-cities']);
+  assert.deepEqual(filterPublicProfilesBySegment(profiles, reference, 'all').map(({ userId }) => userId), [
+    'all-signals', 'residence', 'departure', 'other',
+  ]);
+  assert.deepEqual(filterPublicProfilesBySegment(profiles, reference, 'residence').map(({ userId }) => userId), [
+    'all-signals', 'residence',
+  ]);
+  assert.deepEqual(filterPublicProfilesBySegment(profiles, reference, 'departure').map(({ userId }) => userId), [
+    'all-signals', 'departure',
+  ]);
 });
 
-test('historical periods are selectable only for the current stored profile period', () => {
-  const now = new Date(2026, 7, 9);
-  const storedPeriod = { year: 2025, month: 7 };
-  assert.equal(isDiscoveryPeriodSelectable(2025, 7, storedPeriod, now), true);
-  assert.equal(isDiscoveryPeriodSelectable(2025, 8, storedPeriod, now), false);
-  assert.equal(isDiscoveryPeriodSelectable(2026, 8, storedPeriod, now), true);
+test('duplicate city segments are removed when residence and departure are identical', () => {
+  assert.deepEqual(getDiscoverySegmentOptions(reference).map(({ id }) => id), ['all', 'residence', 'departure']);
+  assert.deepEqual(getDiscoverySegmentOptions({ ...reference, departureCity: 55 }).map(({ id }) => id), [
+    'all', 'residence',
+  ]);
+});
+
+test('match reasons are contextual, ordered, and limited to two', () => {
+  assert.deepEqual(getMatchReasonBadges(reference, createProfile({
+    residenceCity: 55,
+    departureCity: 6,
+    militaryUnit: '1. Piyade Tugayı',
+  })), ['Aynı birlik', "Ankara'dan yola çıkıyor"]);
+  assert.deepEqual(getMatchReasonBadges(reference, createProfile({ residenceCity: 55 })), ['Aynı şehirden']);
+});
+
+test('empty-state copy reflects the selected segment', () => {
+  assert.equal(getDiscoveryEmptyStateCopy('all'), 'Henüz senin devre grubunda başka kimse yok.');
+  assert.equal(getDiscoveryEmptyStateCopy('residence'), 'Henüz senin şehrinden bir devre bulunamadı.');
+  assert.equal(getDiscoveryEmptyStateCopy('departure'), 'Henüz seninle aynı şehirden yola çıkacak biri yok.');
 });

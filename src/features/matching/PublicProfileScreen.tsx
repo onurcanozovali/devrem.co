@@ -20,6 +20,7 @@ function PublicProfileContent({ profile }: { profile: PublicProfile }) {
   const { colors, spacing } = useTheme();
   const photoURL = useProfilePhotoURL(profile.userId, profile.photoPath, profile.updatedAt);
   const details = [
+    ['Yaşadığı şehir', getProvinceName(profile.residenceCity)],
     ['Gideceği şehir', getProvinceName(profile.militaryCity)],
     ['Askerlik dönemi', getMilitaryPeriodLabel(profile.militaryPeriodYear, profile.militaryPeriodMonth)],
     ['Askerlik türü', militaryTypeLabels[profile.militaryType]],

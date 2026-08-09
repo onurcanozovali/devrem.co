@@ -4,6 +4,7 @@ import type { MilitaryType } from '@/features/profile/types/profile';
 export interface PublicProfile {
   userId: string;
   firstName: string;
+  residenceCity: ProvinceCode;
   departureCity: ProvinceCode;
   militaryCity: ProvinceCode;
   militaryPeriodYear: number;
@@ -16,6 +17,7 @@ export interface PublicProfile {
 
 export interface DiscoveryReferenceProfile {
   userId: string;
+  residenceCity: ProvinceCode;
   departureCity: ProvinceCode;
   militaryCity: ProvinceCode;
   militaryPeriodYear: number;
@@ -23,9 +25,9 @@ export interface DiscoveryReferenceProfile {
   militaryUnit: string | null;
 }
 
-export interface DiscoveryFilters {
-  militaryPeriodYear: number;
-  militaryPeriodMonth: number;
-  militaryCity: ProvinceCode | null;
-  departureCity: ProvinceCode | null;
+export type DiscoverySegment = 'all' | 'residence' | 'departure';
+
+export interface DiscoverySegmentOption {
+  id: DiscoverySegment;
+  label: string;
 }

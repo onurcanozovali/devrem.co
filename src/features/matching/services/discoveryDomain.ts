@@ -1,7 +1,6 @@
-import { isProvinceCode } from '@/data/turkeyProvinces';
+import { getProvinceName, isProvinceCode } from '@/data/turkeyProvinces';
 import { isValidProfilePhotoPath } from '@/features/profile/services/profilePhotoDomain';
 import {
-  isMilitaryPeriodCurrentOrFuture,
   isValidMilitaryPeriod,
   isValidName,
   isValidOptionalMilitaryUnit,
@@ -9,13 +8,15 @@ import {
 } from '@/features/profile/services/profileValidation';
 import { militaryTypes, type MilitaryType } from '@/features/profile/types/profile';
 import type {
-  DiscoveryFilters,
   DiscoveryReferenceProfile,
+  DiscoverySegment,
+  DiscoverySegmentOption,
   PublicProfile,
 } from '../types/discovery';
 
 const publicProfileFields = [
   'firstName',
+  'residenceCity',
   'departureCity',
   'militaryCity',
   'militaryPeriodYear',
@@ -44,6 +45,7 @@ export function parsePublicProfileData(userId: string, value: unknown): PublicPr
   if (!userId || !isRecord(value) || !hasOnlyPublicProfileFields(value)) return null;
   if (
     !isValidName(value.firstName)
+    || !isProvinceCode(value.residenceCity)
     || !isProvinceCode(value.departureCity)
     || !isProvinceCode(value.militaryCity)
     || !isValidMilitaryPeriod(value.militaryPeriodYear, value.militaryPeriodMonth)
@@ -56,6 +58,7 @@ export function parsePublicProfileData(userId: string, value: unknown): PublicPr
   return {
     userId,
     firstName: normalizeWhitespace(value.firstName),
+    residenceCity: value.residenceCity,
     departureCity: value.departureCity,
     militaryCity: value.militaryCity,
     militaryPeriodYear: value.militaryPeriodYear as number,
@@ -78,50 +81,81 @@ export function getDiscoveryRelevanceScore(
   if (
     candidate.militaryPeriodYear !== reference.militaryPeriodYear
     || candidate.militaryPeriodMonth !== reference.militaryPeriodMonth
+    || candidate.militaryCity !== reference.militaryCity
   ) return -1;
 
   let score = 0;
-  if (candidate.militaryCity === reference.militaryCity) score += 100;
   const referenceUnit = normalizeMilitaryUnit(reference.militaryUnit);
   const candidateUnit = normalizeMilitaryUnit(candidate.militaryUnit);
-  if (referenceUnit && candidateUnit && referenceUnit === candidateUnit) score += 60;
-  if (candidate.departureCity === reference.departureCity) score += 30;
+  if (referenceUnit && candidateUnit && referenceUnit === candidateUnit) score += 100;
+  if (candidate.departureCity === reference.departureCity) score += 60;
+  if (candidate.residenceCity === reference.residenceCity) score += 30;
   return score;
 }
 
 export function filterAndRankPublicProfiles(
   candidates: PublicProfile[],
   reference: DiscoveryReferenceProfile,
-  filters: DiscoveryFilters,
 ): PublicProfile[] {
-  const relevanceReference = {
-    ...reference,
-    militaryPeriodYear: filters.militaryPeriodYear,
-    militaryPeriodMonth: filters.militaryPeriodMonth,
-  };
   return candidates
     .filter((candidate) => (
       candidate.userId !== reference.userId
-      && candidate.militaryPeriodYear === filters.militaryPeriodYear
-      && candidate.militaryPeriodMonth === filters.militaryPeriodMonth
-      && (filters.militaryCity === null || candidate.militaryCity === filters.militaryCity)
-      && (filters.departureCity === null || candidate.departureCity === filters.departureCity)
+      && candidate.militaryPeriodYear === reference.militaryPeriodYear
+      && candidate.militaryPeriodMonth === reference.militaryPeriodMonth
+      && candidate.militaryCity === reference.militaryCity
     ))
     .sort((left, right) => {
-      const scoreDifference = getDiscoveryRelevanceScore(relevanceReference, right)
-        - getDiscoveryRelevanceScore(relevanceReference, left);
+      const scoreDifference = getDiscoveryRelevanceScore(reference, right)
+        - getDiscoveryRelevanceScore(reference, left);
       if (scoreDifference !== 0) return scoreDifference;
       const nameDifference = left.firstName.localeCompare(right.firstName, 'tr-TR');
       return nameDifference !== 0 ? nameDifference : left.userId.localeCompare(right.userId);
     });
 }
 
-export function isDiscoveryPeriodSelectable(
-  year: number,
-  month: number,
-  profilePeriod: { year: number; month: number },
-  referenceDate = new Date(),
-): boolean {
-  return isMilitaryPeriodCurrentOrFuture(year, month, referenceDate)
-    || (year === profilePeriod.year && month === profilePeriod.month);
+export function getDiscoverySegmentOptions(
+  reference: DiscoveryReferenceProfile,
+): DiscoverySegmentOption[] {
+  return [
+    { id: 'all', label: 'Tümü' },
+    { id: 'residence', label: 'Benim Şehrimden' },
+    ...(reference.residenceCity === reference.departureCity
+      ? []
+      : [{ id: 'departure' as const, label: 'Benimle Yola Çıkanlar' }]),
+  ];
+}
+
+export function filterPublicProfilesBySegment(
+  profiles: PublicProfile[],
+  reference: DiscoveryReferenceProfile,
+  segment: DiscoverySegment,
+): PublicProfile[] {
+  if (segment === 'residence') {
+    return profiles.filter(({ residenceCity }) => residenceCity === reference.residenceCity);
+  }
+  if (segment === 'departure') {
+    return profiles.filter(({ departureCity }) => departureCity === reference.departureCity);
+  }
+  return profiles;
+}
+
+export function getMatchReasonBadges(
+  reference: DiscoveryReferenceProfile,
+  candidate: PublicProfile,
+): string[] {
+  const reasons: string[] = [];
+  const referenceUnit = normalizeMilitaryUnit(reference.militaryUnit);
+  const candidateUnit = normalizeMilitaryUnit(candidate.militaryUnit);
+  if (referenceUnit && candidateUnit && referenceUnit === candidateUnit) reasons.push('Aynı birlik');
+  if (candidate.departureCity === reference.departureCity) {
+    reasons.push(`${getProvinceName(candidate.departureCity)}'dan yola çıkıyor`);
+  }
+  if (candidate.residenceCity === reference.residenceCity) reasons.push('Aynı şehirden');
+  return reasons.slice(0, 2);
+}
+
+export function getDiscoveryEmptyStateCopy(segment: DiscoverySegment): string {
+  if (segment === 'residence') return 'Henüz senin şehrinden bir devre bulunamadı.';
+  if (segment === 'departure') return 'Henüz seninle aynı şehirden yola çıkacak biri yok.';
+  return 'Henüz senin devre grubunda başka kimse yok.';
 }
