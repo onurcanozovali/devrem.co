@@ -2,18 +2,17 @@ import { deflateSync } from 'node:zlib';
 
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 
-import type { PublicProfileProjection } from './publicProfile.js';
-import { synchronizePublicProfile } from './publicProfileSync.js';
+import { createPublicProfileProjection, type PublicProfileProjection } from './publicProfile.js';
 
 interface SeedBucket {
   file(path: string): {
     save(data: Buffer, options: object): Promise<void>;
     delete(options: { ignoreNotFound: boolean }): Promise<unknown>;
+    exists(): Promise<[boolean]>;
   };
 }
 
 export interface DiscoverySeedContext {
-  currentUserId: string;
   residenceCity: number;
   departureCity: number;
   militaryCity: number;
@@ -31,6 +30,14 @@ interface DiscoverySeedProfile {
 
 const markerPath = '_developmentSeeds/discovery';
 const fakeIdPrefix = 'devrem-discovery-seed-';
+const fallbackContext: DiscoverySeedContext = {
+  residenceCity: 34,
+  departureCity: 6,
+  militaryCity: 43,
+  militaryPeriodYear: 2027,
+  militaryPeriodMonth: 2,
+  militaryUnit: '1. Piyade Tugayı',
+};
 
 function otherProvince(...excluded: number[]): number {
   for (let province = 1; province <= 81; province += 1) {
@@ -91,12 +98,26 @@ export function buildDiscoverySeedProfiles(context: DiscoverySeedContext): Disco
       militaryPeriodYear: differentPeriod.year,
       militaryPeriodMonth: differentPeriod.month,
     }),
-    create(context.currentUserId, 'G', 'Deneme Kullanıcı', {
-      residenceCity: context.residenceCity,
-      departureCity: context.departureCity,
-      militaryUnit: context.militaryUnit,
-    }),
+    create(`${fakeIdPrefix}g1`, 'G', 'Deneme Mert', { militaryType: 'paid' }),
   ];
+}
+
+export async function resolveDiscoverySeedContext(database: Firestore): Promise<DiscoverySeedContext> {
+  const snapshot = await database.collection('users').orderBy('updatedAt', 'desc').limit(20).get();
+  for (const documentSnapshot of snapshot.docs) {
+    const projection = createPublicProfileProjection(documentSnapshot.id, documentSnapshot.data());
+    if (projection?.militaryUnit) {
+      return {
+        residenceCity: projection.residenceCity,
+        departureCity: projection.departureCity,
+        militaryCity: projection.militaryCity,
+        militaryPeriodYear: projection.militaryPeriodYear,
+        militaryPeriodMonth: projection.militaryPeriodMonth,
+        militaryUnit: projection.militaryUnit,
+      };
+    }
+  }
+  return fallbackContext;
 }
 
 function crc32(buffer: Buffer): number {
@@ -160,20 +181,16 @@ export async function seedDiscoveryProfiles(
   const profiles = buildDiscoverySeedProfiles(context);
   const markerReference = database.doc(markerPath);
   const markerSnapshot = await markerReference.get();
-  if (markerSnapshot.exists && markerSnapshot.get('currentUserId') !== context.currentUserId) {
-    throw new Error('Existing discovery seed belongs to a different current user. Clear it first.');
-  }
 
-  const fakeProfiles = profiles.filter(({ group }) => group !== 'G');
   if (!markerSnapshot.exists) {
-    const snapshots = await database.getAll(...fakeProfiles.map(({ id }) => database.doc(`publicProfiles/${id}`)));
+    const snapshots = await database.getAll(...profiles.map(({ id }) => database.doc(`publicProfiles/${id}`)));
     if (snapshots.some(({ exists }) => exists)) {
       throw new Error('A deterministic discovery seed ID already exists. Refusing to overwrite it.');
     }
     await markerReference.create({
-      currentUserId: context.currentUserId,
       seededIds: profiles.map(({ id }) => id),
       avatarIds: profiles.filter(({ hasAvatar }) => hasAvatar).map(({ id }) => id),
+      context,
       createdAt: FieldValue.serverTimestamp(),
     });
   }
@@ -193,6 +210,45 @@ export async function seedDiscoveryProfiles(
   return profiles.length;
 }
 
+export async function verifyDiscoveryProfiles(
+  database: Firestore,
+): Promise<{ id: string; firstName: string; photoPath: string | null }[]> {
+  const markerSnapshot = await database.doc(markerPath).get();
+  if (!markerSnapshot.exists) throw new Error('Discovery seed marker does not exist.');
+  const seededIds = markerSnapshot.get('seededIds') as string[];
+  const snapshots = await database.getAll(...seededIds.map((id) => database.doc(`publicProfiles/${id}`)));
+  const verified = snapshots.flatMap((snapshot) => {
+    if (!snapshot.exists) return [];
+    const firstName = snapshot.get('firstName');
+    const photoPath = snapshot.get('photoPath');
+    return typeof firstName === 'string' && (typeof photoPath === 'string' || photoPath === null)
+      ? [{ id: snapshot.id, firstName, photoPath }]
+      : [];
+  });
+  if (seededIds.length !== 12 || verified.length !== 12) {
+    throw new Error(`Expected 12 discovery profiles but verified ${verified.length}.`);
+  }
+  return verified;
+}
+
+export async function verifyDiscoveryQuery(database: Firestore): Promise<number> {
+  const markerSnapshot = await database.doc(markerPath).get();
+  if (!markerSnapshot.exists) throw new Error('Discovery seed marker does not exist.');
+  const context = markerSnapshot.get('context') as DiscoverySeedContext;
+  const seededIds = new Set(markerSnapshot.get('seededIds') as string[]);
+  const snapshot = await database.collection('publicProfiles')
+    .where('militaryPeriodYear', '==', context.militaryPeriodYear)
+    .where('militaryPeriodMonth', '==', context.militaryPeriodMonth)
+    .where('militaryCity', '==', context.militaryCity)
+    .limit(40)
+    .get();
+  const eligibleSeedCount = snapshot.docs.filter(({ id }) => seededIds.has(id)).length;
+  if (eligibleSeedCount !== 10) {
+    throw new Error(`Expected the discovery query to return 10 seeded candidates but found ${eligibleSeedCount}.`);
+  }
+  return eligibleSeedCount;
+}
+
 export async function clearDiscoveryProfiles(database: Firestore, bucket: SeedBucket): Promise<number> {
   const markerReference = database.doc(markerPath);
   const markerSnapshot = await markerReference.get();
@@ -200,13 +256,9 @@ export async function clearDiscoveryProfiles(database: Firestore, bucket: SeedBu
 
   const seededIds = markerSnapshot.get('seededIds') as string[];
   const avatarIds = markerSnapshot.get('avatarIds') as string[];
-  const currentUserId = markerSnapshot.get('currentUserId') as string;
   const batch = database.batch();
-  for (const id of seededIds) {
-    if (id !== currentUserId) batch.delete(database.doc(`publicProfiles/${id}`));
-  }
+  for (const id of seededIds) batch.delete(database.doc(`publicProfiles/${id}`));
   await batch.commit();
-  await synchronizePublicProfile(database, currentUserId);
   await Promise.all(avatarIds.map((id) => (
     bucket.file(`users/${id}/profile/avatar.jpg`).delete({ ignoreNotFound: true })
   )));

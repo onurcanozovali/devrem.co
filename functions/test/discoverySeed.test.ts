@@ -6,7 +6,6 @@ import test from 'node:test';
 import { buildDiscoverySeedProfiles } from '../src/discoverySeed';
 
 const profiles = buildDiscoverySeedProfiles({
-  currentUserId: 'current-test-user',
   residenceCity: 34,
   departureCity: 6,
   militaryCity: 43,
@@ -28,14 +27,17 @@ test('discovery seed creates exactly the requested deterministic scenario groups
   assert.equal(profiles.filter(({ hasAvatar }) => hasAvatar).length, 4);
 });
 
-test('excluded seed groups differ by destination, period, or current user ID', () => {
+test('excluded and edge-case seed groups remain fake and outside private schema', () => {
   const excludedDestination = profiles.find(({ group }) => group === 'E');
   const excludedPeriod = profiles.find(({ group }) => group === 'F');
-  const currentUser = profiles.find(({ group }) => group === 'G');
+  const edgeCase = profiles.find(({ group }) => group === 'G');
   assert.notEqual(excludedDestination?.profile.militaryCity, 43);
   assert.notDeepEqual(
     [excludedPeriod?.profile.militaryPeriodYear, excludedPeriod?.profile.militaryPeriodMonth],
     [2027, 2],
   );
-  assert.equal(currentUser?.id, 'current-test-user');
+  assert.equal(edgeCase?.id, 'devrem-discovery-seed-g1');
+  assert.equal(edgeCase?.profile.militaryType, 'paid');
+  assert.ok(profiles.every(({ id }) => id.startsWith('devrem-discovery-seed-')));
+  assert.ok(profiles.every(({ profile }) => !('birthYear' in profile)));
 });

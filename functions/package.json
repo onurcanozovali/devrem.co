@@ -8,10 +8,11 @@
   },
   "scripts": {
     "backfill:public-profiles": "pnpm run build && node lib/runPublicProfileBackfill.js",
-    "clear:discovery-seed": "pnpm run build && node lib/runDiscoverySeed.js clear",
+    "seed:discovery:clear": "pnpm run build && node lib/runDiscoverySeed.js clear",
     "build": "tsc",
     "lint": "eslint src --ext .ts",
-    "seed:discovery": "pnpm run build && node lib/runDiscoverySeed.js seed"
+    "seed:discovery": "pnpm run build && node lib/runDiscoverySeed.js seed",
+    "seed:discovery:verify": "pnpm run build && node lib/runDiscoverySeed.js verify"
   },
   "dependencies": {
     "firebase-admin": "^13.4.0",

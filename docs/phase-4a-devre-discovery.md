@@ -33,32 +33,25 @@ The single required equality-filter shape is declared in `firestore.indexes.json
 
 ## Development seed data
 
-The Admin-only seed creates exactly 12 deterministic public profiles for the current test context: unit/departure matches, departure-only matches, residence-only matches, general group members, wrong-destination and wrong-period exclusions, and the current-user exclusion. Four profiles receive generated synthetic avatars. It never runs from application startup and does not create Auth users or private profile documents.
+The Admin-only seed creates exactly 12 deterministic fake documents in `publicProfiles`: unit/departure matches, departure-only matches, residence-only matches, general group members, wrong-destination and wrong-period exclusions, and an additional paid-service edge case. Four profiles receive generated synthetic avatars and eight use the fallback avatar. It never runs from application startup and does not create Auth users or private `users/{uid}` documents.
 
-Set Application Default Credentials for the intended development project, then define these PowerShell variables with values matching the test user's profile:
+The target is hard-coded and checked as `devrem-d985b`; configured Google Cloud project variables must either be absent or equal that ID. The script reads the most recently updated complete development profile only to derive matching context. If no profile with a known unit is available, it uses the documented Phase 4A fallback context. The current profile is never modified.
 
-```powershell
-$env:DEVREM_DISCOVERY_SEED_ENV = "development"
-$env:DEVREM_DISCOVERY_PROJECT_ID = "your-development-project"
-$env:DEVREM_DISCOVERY_SEED_CONFIRM = "seed:your-development-project"
-$env:DEVREM_DISCOVERY_STORAGE_BUCKET = "your-development-bucket"
-$env:DEVREM_DISCOVERY_CURRENT_UID = "test-user-uid"
-$env:DEVREM_DISCOVERY_RESIDENCE_CITY = "34"
-$env:DEVREM_DISCOVERY_DEPARTURE_CITY = "6"
-$env:DEVREM_DISCOVERY_MILITARY_CITY = "43"
-$env:DEVREM_DISCOVERY_PERIOD_YEAR = "2027"
-$env:DEVREM_DISCOVERY_PERIOD_MONTH = "2"
-$env:DEVREM_DISCOVERY_UNIT = "1. Piyade Tugayı"
-pnpm --dir functions run seed:discovery
+Authenticate once with the repository-local Firebase CLI, then seed and verify:
+
+```text
+pnpm exec firebase login
+pnpm seed:discovery
+pnpm seed:discovery:verify
 ```
 
-Rerunning the command updates the same seed IDs. It refuses deterministic-ID collisions and production-looking project IDs. The marker is Admin-only under `_developmentSeeds/discovery`. Clear the data after testing:
+The script adapts the existing local Firebase CLI session into an ephemeral ADC file in the operating-system temp directory. The file is removed when the process exits and credentials are never committed or printed. Rerunning the seed command updates the same seed IDs. It refuses deterministic-ID collisions on first creation. The marker is Admin-only under `_developmentSeeds/discovery`. Clear the data after testing:
 
-```powershell
-pnpm --dir functions run clear:discovery-seed
+```text
+pnpm seed:discovery:clear
 ```
 
-Cleanup deletes seeded public documents and avatars, then rebuilds the current user's projection from the latest authoritative private profile. The same commands may target emulators by setting the standard Firestore and Storage emulator host variables. Never commit credentials or point this tooling at production.
+Cleanup deletes only the 12 deterministic fake public documents, their generated avatars, and the seed marker. Never commit credentials. The tooling cannot be pointed at another Firebase project without a code change.
 
 ## Existing-user backfill
 
