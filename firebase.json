@@ -1,4 +1,7 @@
 {
+  "react-native": {
+    "messaging_auto_init_enabled": false
+  },
   "functions": [
     {
       "source": "functions",

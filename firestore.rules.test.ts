@@ -174,3 +174,90 @@ test('public discovery access does not expose another private user profile', asy
   const otherDatabase = environment.authenticatedContext('user-2').firestore();
   await assertFails(getDoc(doc(otherDatabase, 'users', 'user-1')));
 });
+
+test('notification preferences are owner-private and preserve strict discovery keys', async () => {
+  await environment.clearFirestore();
+  const ownerDatabase = environment.authenticatedContext('user-1').firestore();
+  const preferenceReference = doc(ownerDatabase, 'users/user-1/notificationPreferences/main');
+  await assertSucceeds(setDoc(preferenceReference, {
+    enabled: true,
+    discovery: {
+      newDevre: true,
+      sameResidenceCity: true,
+      sameDepartureCity: true,
+    },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(preferenceReference, {
+    enabled: false,
+    updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(getDoc(preferenceReference));
+
+  const otherDatabase = environment.authenticatedContext('user-2').firestore();
+  await assertFails(getDoc(doc(otherDatabase, 'users/user-1/notificationPreferences/main')));
+  await assertFails(updateDoc(doc(otherDatabase, 'users/user-1/notificationPreferences/main'), {
+    enabled: true,
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(preferenceReference, {
+    social: { message: true },
+    updatedAt: serverTimestamp(),
+  }));
+});
+
+test('device registrations are owner-private and cannot be enumerated by another user', async () => {
+  await environment.clearFirestore();
+  const ownerDatabase = environment.authenticatedContext('user-1').firestore();
+  const deviceReference = doc(ownerDatabase, 'users/user-1/devices/install-1');
+  await assertSucceeds(setDoc(deviceReference, {
+    installationId: 'install-1',
+    token: 'fcm-registration-token-at-least-twenty-characters',
+    platform: 'android',
+    enabled: true,
+    appVersion: '1.0.0',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    lastSeenAt: serverTimestamp(),
+  }));
+  await assertSucceeds(getDoc(deviceReference));
+  await assertSucceeds(updateDoc(deviceReference, {
+    token: 'refreshed-registration-token-at-least-twenty-characters',
+    updatedAt: serverTimestamp(),
+    lastSeenAt: serverTimestamp(),
+  }));
+
+  const otherDatabase = environment.authenticatedContext('user-2').firestore();
+  await assertFails(getDoc(doc(otherDatabase, 'users/user-1/devices/install-1')));
+  await assertFails(getDocs(collection(otherDatabase, 'users/user-1/devices')));
+  await assertFails(updateDoc(doc(otherDatabase, 'users/user-1/devices/install-1'), {
+    enabled: false,
+    updatedAt: serverTimestamp(),
+    lastSeenAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(ownerDatabase, 'users/user-1/devices/install-2'), {
+    installationId: 'different-installation',
+    token: 'short',
+    platform: 'android',
+    enabled: true,
+    appVersion: '1.0.0',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    lastSeenAt: serverTimestamp(),
+  }));
+});
+
+test('trusted notification state remains inaccessible to clients', async () => {
+  await environment.clearFirestore();
+  const database = environment.authenticatedContext('user-1').firestore();
+  for (const path of [
+    '_notificationControl/discovery',
+    '_notificationMemberships/user-1',
+    '_notificationDeliveries/event-1',
+    '_notificationRateLimits/user-1_20260810',
+  ]) {
+    await assertFails(getDoc(doc(database, path)));
+    await assertFails(setDoc(doc(database, path), { enabled: true }));
+  }
+});

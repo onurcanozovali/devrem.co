@@ -18,6 +18,18 @@ export {
 export { discoveryPageSize, fetchPublicProfile, fetchPublicProfiles } from './discovery';
 export { deleteProfilePhoto, resolveProfilePhotoURL, uploadProfilePhoto } from './profilePhoto';
 export {
+  deleteCurrentNotificationDevice,
+  fetchNotificationPreferences,
+  getInitialOpenedNotification,
+  getNotificationPermissionState,
+  registerCurrentNotificationDevice,
+  requestNotificationPermission,
+  saveNotificationPreferences,
+  subscribeToForegroundNotifications,
+  subscribeToNotificationTokenRefresh,
+  subscribeToOpenedNotifications,
+} from './notifications';
+export {
   createPreparationItem,
   dismissPreparationHint,
   initializePreparation,

@@ -5,6 +5,7 @@ import {
   confirmAccountDeletionReauthentication,
   confirmPhoneVerification,
   deleteCurrentAccount,
+  deleteCurrentNotificationDevice,
   getCurrentUserPhoneNumber,
   requestAccountDeletionReauthentication,
   requestPhoneVerification,
@@ -89,10 +90,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const logout = useCallback(async () => {
+    if (session) await deleteCurrentNotificationDevice(session.userId);
     await signOutCurrentUser();
     clearVerification();
     accountDeletionVerificationIdRef.current = null;
-  }, [clearVerification]);
+  }, [clearVerification, session]);
 
   const clearAccountDeletionVerification = useCallback(() => {
     accountDeletionVerificationIdRef.current = null;

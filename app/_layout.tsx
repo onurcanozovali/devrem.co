@@ -11,6 +11,7 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import { PreparationProvider } from '@/features/preparation/PreparationProvider';
+import { NotificationProvider } from '@/features/notifications/NotificationProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 function RootNavigator() {
@@ -72,6 +73,7 @@ function RootNavigator() {
       <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete'}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="devre/[userId]" />
+        <Stack.Screen name="notifications" />
       </Stack.Protected>
     </Stack>
   );
@@ -86,11 +88,13 @@ const DataProviders = memo(function DataProviders() {
   return (
     <AppErrorBoundary>
       <AuthProvider>
-        <ProfileProvider>
-          <PreparationProvider>
-            <RootNavigator />
-          </PreparationProvider>
-        </ProfileProvider>
+        <NotificationProvider>
+          <ProfileProvider>
+            <PreparationProvider>
+              <RootNavigator />
+            </PreparationProvider>
+          </ProfileProvider>
+        </NotificationProvider>
       </AuthProvider>
     </AppErrorBoundary>
   );

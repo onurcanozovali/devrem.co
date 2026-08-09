@@ -8,6 +8,7 @@
   },
   "scripts": {
     "backfill:public-profiles": "pnpm run build && node lib/runPublicProfileBackfill.js",
+    "baseline:discovery-notifications": "pnpm run build && node lib/runNotificationBaseline.js",
     "seed:discovery:clear": "pnpm run build && node lib/runDiscoverySeed.js clear",
     "build": "tsc",
     "lint": "eslint src --ext .ts",

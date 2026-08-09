@@ -203,6 +203,65 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function hasValidNotificationPreferencesShape() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['enabled', 'discovery', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['enabled', 'discovery', 'createdAt', 'updatedAt'])
+        && data.enabled is bool
+        && data.discovery is map
+        && data.discovery.keys().hasAll([
+          'newDevre',
+          'sameResidenceCity',
+          'sameDepartureCity'
+        ])
+        && data.discovery.keys().hasOnly([
+          'newDevre',
+          'sameResidenceCity',
+          'sameDepartureCity'
+        ])
+        && data.discovery.newDevre is bool
+        && data.discovery.sameResidenceCity is bool
+        && data.discovery.sameDepartureCity is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function hasValidDeviceRegistrationShape(installationId) {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'installationId',
+          'token',
+          'platform',
+          'enabled',
+          'appVersion',
+          'createdAt',
+          'updatedAt',
+          'lastSeenAt'
+        ])
+        && data.keys().hasOnly([
+          'installationId',
+          'token',
+          'platform',
+          'enabled',
+          'appVersion',
+          'createdAt',
+          'updatedAt',
+          'lastSeenAt'
+        ])
+        && data.installationId == installationId
+        && data.token is string
+        && data.token.size() >= 20
+        && data.token.size() <= 4096
+        && data.platform in ['android', 'ios']
+        && data.enabled is bool
+        && data.appVersion is string
+        && data.appVersion.size() >= 1
+        && data.appVersion.size() <= 50
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.lastSeenAt is timestamp;
+    }
+
     match /users/{uid} {
       allow read: if isOwnProfile(uid);
 
@@ -271,6 +330,42 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
 
       allow delete: if false;
+    }
+
+    match /users/{uid}/notificationPreferences/{preferenceId} {
+      allow read: if isOwnProfile(uid) && preferenceId == 'main';
+
+      allow create: if isOwnProfile(uid)
+        && preferenceId == 'main'
+        && hasValidNotificationPreferencesShape()
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isOwnProfile(uid)
+        && preferenceId == 'main'
+        && hasValidNotificationPreferencesShape()
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if isOwnProfile(uid) && preferenceId == 'main';
+    }
+
+    match /users/{uid}/devices/{installationId} {
+      allow read: if isOwnProfile(uid);
+
+      allow create: if isOwnProfile(uid)
+        && hasValidDeviceRegistrationShape(installationId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastSeenAt == request.time;
+
+      allow update: if isOwnProfile(uid)
+        && hasValidDeviceRegistrationShape(installationId)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastSeenAt == request.time;
+
+      allow delete: if isOwnProfile(uid);
     }
 
     match /{document=**} {

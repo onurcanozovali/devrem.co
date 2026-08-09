@@ -279,6 +279,39 @@ Mobil uygulama ve bu repo hiçbir zaman şunları içermemelidir:
 
 Firebase Admin SDK yalnızca Cloud Functions veya ayrı bir güvenilir backend ortamında çalışmalıdır.
 
+## Phase 4B: Discovery bildirimleri
+
+Discovery bildirimlerinde recipient seçimini yalnızca Cloud Functions yapar. Client yalnızca kendi
+`users/{uid}/notificationPreferences/main` tercih belgesini ve
+`users/{uid}/devices/{installationId}` cihaz kaydını yönetebilir. Membership, delivery, rate-limit
+ve rollout control belgeleri client erişimine kapalıdır.
+
+Canlıya alma sırası:
+
+1. Firebase Console → **Project settings → Cloud Messaging** altında iOS uygulaması için APNs authentication key'in yüklü olduğunu doğrulayın. Android ve iOS Firebase app tanımları mevcut native config dosyalarıyla aynı projeyi göstermelidir.
+2. Functions ve Firestore Rules'u deploy edin. Control belgesi yokken bildirim gate'i kapalı kabul edilir; deploy tek başına mevcut kullanıcılara bildirim göndermez.
+3. Application Default Credentials ile hedef projeyi açıkça onaylayıp mevcut public profilleri baseline edin:
+
+```powershell
+$env:GCLOUD_PROJECT = '<firebase-project-id>'
+$env:DEVREM_NOTIFICATION_BASELINE_CONFIRM = $env:GCLOUD_PROJECT
+pnpm baseline:discovery-notifications
+```
+
+Baseline önce gate'i kapatır, mevcut üyelikleri transaction ile sessizce yazar, development seed UID'lerini dışarıda bırakır ve yalnızca tüm sayfalar başarıyla tamamlanınca gate'i açar. Komut hata verirse delivery kapalı kalır ve aynı komut güvenle yeniden çalıştırılabilir.
+
+4. Firestore TTL policy'lerini `_notificationDeliveries.expiresAt` ve `_notificationRateLimits.expiresAt` alanları için etkinleştirin. Bu retention temizliği içindir; delivery doğruluğu TTL çalışmasına bağlı değildir.
+5. `@react-native-firebase/messaging` native modülü nedeniyle Android ve iOS için yeni EAS development build oluşturun. JavaScript update veya eski development client yeterli değildir.
+
+```bash
+pnpm dlx eas-cli@latest build --profile development --platform android
+pnpm dlx eas-cli@latest build --profile development --platform ios
+```
+
+Gerçek push akışı fiziksel Android ve iOS cihazlarda; foreground banner, background notification tap,
+terminated-app tap, token refresh, master kapatma ve logout senaryolarıyla doğrulanmalıdır. iOS Simulator
+gerçek APNs token testi için yeterli değildir.
+
 ## Tema ve UI kuralları
 
 - Renk, boşluk, radius ve tipografi değerleri `src/theme` üzerinden alınır.
