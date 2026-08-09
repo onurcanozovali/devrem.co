@@ -20,6 +20,7 @@ export interface CompleteUserProfileInput {
 
 export interface UserProfile extends CompleteUserProfileInput {
   uid: string;
+  photoPath: string | null;
   onboardingCompleted: true;
   createdAt: Date | null;
   updatedAt: Date | null;

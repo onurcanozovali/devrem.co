@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { ActionSheetIOS, Alert, Platform, Pressable, View } from 'react-native';
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { ScreenContainer } from '@/components/common/ScreenContainer';
 import { AppText } from '@/components/ui/AppText';
+import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { getProvinceName } from '@/data/turkeyProvinces';
@@ -14,7 +15,10 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { ProfileEditModal } from './components/ProfileEditModal';
 import { AccountDeletionModal } from './components/AccountDeletionModal';
 import { useProfile } from './hooks/useProfile';
+import { useProfilePhotoURL } from './hooks/useProfilePhotoURL';
 import { militaryTypeLabels, monthLabels } from './profileOptions';
+import { mapProfilePhotoError, getProfileInitials } from './services/profilePhotoDomain';
+import { prepareProfilePhoto, selectProfilePhoto } from './services/profilePhoto';
 import { formatStoredDate } from './services/profileValidation';
 
 function ProfileDetail({ label, value }: { label: string; value: string }) {
@@ -29,12 +33,21 @@ function ProfileDetail({ label, value }: { label: string; value: string }) {
 
 export function ProfileScreen() {
   const { logout } = useAuth();
-  const { profile, refreshProfile, updateProfile } = useProfile();
+  const { profile, refreshProfile, removeProfilePhoto, replaceProfilePhoto, updateProfile } = useProfile();
   const { colors, radii, spacing } = useTheme();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [isPhotoWorking, setIsPhotoWorking] = useState(false);
+  const [photoProgress, setPhotoProgress] = useState(0);
+  const [localPhotoURL, setLocalPhotoURL] = useState<string | null>(null);
+  const remotePhotoURL = useProfilePhotoURL(
+    profile?.uid ?? '',
+    profile?.photoPath ?? null,
+    profile?.updatedAt ?? null,
+  );
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -47,6 +60,82 @@ export function ProfileScreen() {
     } finally {
       setIsLoggingOut(false);
     }
+  };
+
+  const handleSelectPhoto = async () => {
+    if (isPhotoWorking) return;
+    setPhotoError(null);
+    try {
+      const selected = await selectProfilePhoto();
+      if (!selected) return;
+      setLocalPhotoURL(selected.uri);
+      setPhotoProgress(0);
+      setIsPhotoWorking(true);
+      const preparedURI = await prepareProfilePhoto(selected);
+      setLocalPhotoURL(preparedURI);
+      await replaceProfilePhoto(preparedURI, setPhotoProgress);
+    } catch (caughtError: unknown) {
+      setLocalPhotoURL(null);
+      setPhotoError(mapProfilePhotoError(caughtError).message);
+    } finally {
+      setIsPhotoWorking(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    if (isPhotoWorking) return;
+    setPhotoError(null);
+    setIsPhotoWorking(true);
+    try {
+      await removeProfilePhoto();
+      setLocalPhotoURL(null);
+    } catch (caughtError: unknown) {
+      setPhotoError(mapProfilePhotoError(caughtError).message);
+    } finally {
+      setIsPhotoWorking(false);
+    }
+  };
+
+  const confirmRemovePhoto = () => {
+    Alert.alert(
+      'Profil fotoğrafını kaldır',
+      'Profil fotoğrafın kaldırılacak. Daha sonra yeniden ekleyebilirsin.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        { text: 'Fotoğrafı kaldır', style: 'destructive', onPress: () => void handleRemovePhoto() },
+      ],
+    );
+  };
+
+  const showPhotoActions = () => {
+    if (isPhotoWorking) return;
+    const hasPhoto = profile?.photoPath !== null;
+    if (Platform.OS === 'ios') {
+      const options = hasPhoto
+        ? ['Fotoğraf seç', 'Fotoğrafı kaldır', 'Vazgeç']
+        : ['Fotoğraf seç', 'Vazgeç'];
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex: options.length - 1,
+          destructiveButtonIndex: hasPhoto ? 1 : undefined,
+          title: 'Profil fotoğrafı',
+        },
+        (index) => {
+          if (index === 0) void handleSelectPhoto();
+          if (hasPhoto && index === 1) confirmRemovePhoto();
+        },
+      );
+      return;
+    }
+
+    Alert.alert('Profil fotoğrafı', undefined, [
+      { text: 'Fotoğraf seç', onPress: () => void handleSelectPhoto() },
+      ...(hasPhoto
+        ? [{ text: 'Fotoğrafı kaldır', style: 'destructive' as const, onPress: confirmRemovePhoto }]
+        : []),
+      { text: 'Vazgeç', style: 'cancel' },
+    ]);
   };
 
   if (!profile) {
@@ -88,6 +177,44 @@ export function ProfileScreen() {
           <Ionicons name="pencil" size={17} color={colors.primary} />
           <AppText weight="700" style={{ color: colors.primary }}>Düzenle</AppText>
         </Pressable>
+      </View>
+
+      <View style={{ alignItems: 'center', gap: spacing.sm }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Profil fotoğrafı seçeneklerini aç"
+          disabled={isPhotoWorking}
+          onPress={showPhotoActions}
+          style={({ pressed }) => ({ opacity: pressed ? 0.82 : 1 })}
+        >
+          <Avatar
+            accessibilityLabel={profile.photoPath ? 'Profil fotoğrafı' : 'Profil fotoğrafı yerine ad ve soyad baş harfleri'}
+            imageURL={localPhotoURL ?? remotePhotoURL}
+            initials={getProfileInitials(profile.firstName, profile.lastName)}
+            loading={isPhotoWorking}
+          />
+        </Pressable>
+        <AppText variant="subtitle" weight="800">{profile.firstName} {profile.lastName}</AppText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Profil fotoğrafını değiştir"
+          accessibilityState={{ busy: isPhotoWorking, disabled: isPhotoWorking }}
+          disabled={isPhotoWorking}
+          onPress={showPhotoActions}
+          style={{ justifyContent: 'center', minHeight: 44 }}
+        >
+          <AppText weight="700" style={{ color: colors.primary }}>Profil fotoğrafını değiştir</AppText>
+        </Pressable>
+        {isPhotoWorking ? (
+          <AppText color="muted" variant="caption" accessibilityLiveRegion="polite">
+            {photoProgress > 0 ? `Fotoğraf yükleniyor · %${Math.round(photoProgress * 100)}` : 'Fotoğraf hazırlanıyor'}
+          </AppText>
+        ) : null}
+        {photoError ? (
+          <AppText color="danger" variant="caption" accessibilityLiveRegion="polite" style={{ textAlign: 'center' }}>
+            {photoError}
+          </AppText>
+        ) : null}
       </View>
 
       <Card style={{ gap: spacing.lg }}>

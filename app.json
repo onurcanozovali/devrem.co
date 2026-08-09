@@ -18,6 +18,14 @@
       "expo-router",
       "expo-font",
       "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Devrem, profil fotoğrafını seçebilmen için fotoğraflarına erişir.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       [

@@ -9,7 +9,13 @@ export {
   signOutCurrentUser,
   subscribeToAuthState,
 } from './auth';
-export { fetchUserProfile, saveCompletedUserProfile, updateUserProfile } from './firestore';
+export {
+  fetchUserProfile,
+  saveCompletedUserProfile,
+  updateUserProfile,
+  updateUserProfilePhotoPath,
+} from './firestore';
+export { deleteProfilePhoto, resolveProfilePhotoURL, uploadProfilePhoto } from './profilePhoto';
 export {
   createPreparationItem,
   dismissPreparationHint,
