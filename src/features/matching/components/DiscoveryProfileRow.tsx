@@ -32,7 +32,7 @@ export const DiscoveryProfileRow = memo(function DiscoveryProfileRow({
       onPress={() => onPress(profile.userId)}
       style={({ pressed }) => ({
         alignItems: 'center',
-        backgroundColor: pressed ? colors.surfaceSubtle : colors.background,
+        backgroundColor: pressed ? colors.surfaceSecondary : colors.background,
         flexDirection: 'row',
         gap: spacing.md,
         minHeight: 92,
@@ -53,7 +53,7 @@ export const DiscoveryProfileRow = memo(function DiscoveryProfileRow({
             {reasonBadges.map((reason) => (
               <View
                 key={reason}
-                style={{ backgroundColor: colors.surfaceSubtle, borderRadius: radii.pill, paddingHorizontal: spacing.sm, paddingVertical: 3 }}
+                style={{ backgroundColor: colors.primarySubtle, borderRadius: radii.pill, paddingHorizontal: spacing.sm, paddingVertical: 3 }}
               >
                 <AppText variant="caption" weight="700">{reason}</AppText>
               </View>

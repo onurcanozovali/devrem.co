@@ -112,7 +112,7 @@ export const PreparationItemRow = memo(function PreparationItemRow({
     }}>
       <Animated.View
         pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceSubtle, opacity: actionsProgress }]}
+        style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceSecondary, opacity: actionsProgress }]}
       />
       <Animated.View
         accessibilityElementsHidden={actionsActive}
@@ -157,7 +157,7 @@ export const PreparationItemRow = memo(function PreparationItemRow({
               opacity: completionProgress,
               transform: [{ scale: completionProgress.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] }) }],
             }}>
-              <Ionicons name="checkmark" size={20} color={colors.onPrimary} />
+              <Ionicons name="checkmark" size={20} color={colors.textInverse} />
             </Animated.View>
           </Animated.View>
         </Pressable>

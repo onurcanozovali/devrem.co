@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { memo } from 'react';
 
 import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -13,7 +14,7 @@ import { PreparationProvider } from '@/features/preparation/PreparationProvider'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 function RootNavigator() {
-  const { colorScheme, colors } = useTheme();
+  const { colors } = useTheme();
   const { status, initializationError } = useAuth();
   const { status: profileStatus, error: profileError, refreshProfile } = useProfile();
 
@@ -55,42 +56,51 @@ function RootNavigator() {
   }
 
   return (
-    <>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          contentStyle: { backgroundColor: colors.background },
-          headerShown: false,
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Protected guard={status === 'unauthenticated'}>
-          <Stack.Screen name="(auth)" />
-        </Stack.Protected>
-        <Stack.Protected guard={status === 'authenticated' && (profileStatus === 'missing' || profileStatus === 'incomplete')}>
-          <Stack.Screen name="onboarding" />
-        </Stack.Protected>
-        <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete'}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="devre/[userId]" />
-        </Stack.Protected>
-      </Stack>
-    </>
+    <Stack
+      screenOptions={{
+        contentStyle: { backgroundColor: colors.background },
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Protected guard={status === 'unauthenticated'}>
+        <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === 'authenticated' && (profileStatus === 'missing' || profileStatus === 'incomplete')}>
+        <Stack.Screen name="onboarding" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete'}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="devre/[userId]" />
+      </Stack.Protected>
+    </Stack>
   );
 }
 
-export default function RootLayout() {
+function ThemedStatusBar() {
+  const { resolvedScheme } = useTheme();
+  return <StatusBar animated style={resolvedScheme === 'dark' ? 'light' : 'dark'} />;
+}
+
+const DataProviders = memo(function DataProviders() {
   return (
     <AppErrorBoundary>
-      <ThemeProvider>
-        <AuthProvider>
-          <ProfileProvider>
-            <PreparationProvider>
-              <RootNavigator />
-            </PreparationProvider>
-          </ProfileProvider>
-        </AuthProvider>
-      </ThemeProvider>
+      <AuthProvider>
+        <ProfileProvider>
+          <PreparationProvider>
+            <RootNavigator />
+          </PreparationProvider>
+        </ProfileProvider>
+      </AuthProvider>
     </AppErrorBoundary>
+  );
+});
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <ThemedStatusBar />
+      <DataProviders />
+    </ThemeProvider>
   );
 }

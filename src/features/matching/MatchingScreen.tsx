@@ -1,4 +1,5 @@
 import { router, type Href } from 'expo-router';
+import { useCallback } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -20,11 +21,11 @@ function DiscoverySkeleton() {
 		<View accessibilityRole="progressbar" accessibilityLabel="Devreler yükleniyor" style={{ gap: spacing.md }}>
 			{[0, 1, 2, 3].map((item) => (
 				<View key={item} style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.md, minHeight: 92 }}>
-					<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 32, height: 64, width: 64 }} />
+					<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 32, height: 64, width: 64 }} />
 					<View style={{ flex: 1, gap: spacing.sm }}>
-						<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 4, height: 16, width: '38%' }} />
-						<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 4, height: 14, width: '72%' }} />
-						<View style={{ backgroundColor: colors.surfaceSubtle, borderRadius: 4, height: 12, width: '54%' }} />
+						<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 4, height: 16, width: '38%' }} />
+						<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 4, height: 14, width: '72%' }} />
+						<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 4, height: 12, width: '54%' }} />
 					</View>
 				</View>
 			))}
@@ -47,9 +48,16 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 	const periodLabel = getMilitaryPeriodLabel(profile.militaryPeriodYear, profile.militaryPeriodMonth);
 	const destinationLabel = getProvinceName(profile.militaryCity);
 
-	const openProfile = (userId: string) => {
+	const openProfile = useCallback((userId: string) => {
 		router.push(`/devre/${userId}` as Href);
-	};
+	}, []);
+	const renderProfile = useCallback(({ item }: { item: PublicProfile }) => (
+		<DiscoveryProfileRow
+			profile={item}
+			reference={reference}
+			onPress={openProfile}
+		/>
+	), [openProfile, reference]);
 
 	return (
 		<SafeAreaView style={{ backgroundColor: colors.background, flex: 1 }} edges={['top', 'left', 'right']}>
@@ -84,7 +92,7 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 									paddingHorizontal: spacing.md,
 								})}
 							>
-								<AppText style={{ color: selected ? colors.onPrimary : colors.text }} variant="caption" weight="800">
+								<AppText style={{ color: selected ? colors.textInverse : colors.textPrimary }} variant="caption" weight="800">
 									{segment.label}
 								</AppText>
 							</Pressable>
@@ -106,14 +114,8 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 				<FlatList<PublicProfile>
 					data={profiles}
 					keyExtractor={(item) => item.userId}
-					renderItem={({ item }) => (
-						<DiscoveryProfileRow
-							profile={item}
-							reference={reference}
-							onPress={openProfile}
-						/>
-					)}
-					ItemSeparatorComponent={() => <View style={{ backgroundColor: colors.border, height: 1 }} />}
+					renderItem={renderProfile}
+					ItemSeparatorComponent={() => <View style={{ backgroundColor: colors.divider, height: 1 }} />}
 					ListEmptyComponent={(
 						<EmptyState
 							title="Henüz eşleşme yok"

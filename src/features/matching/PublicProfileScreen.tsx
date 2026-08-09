@@ -94,7 +94,7 @@ export function PublicProfileScreen() {
           onPress={() => router.back()}
           style={{ alignItems: 'center', justifyContent: 'center', minHeight: 44, minWidth: 44 }}
         >
-          <Ionicons name="arrow-back" size={25} color={colors.text} />
+          <Ionicons name="arrow-back" size={25} color={colors.textPrimary} />
         </Pressable>
         <AppText variant="title" weight="800">Devre Profili</AppText>
       </View>

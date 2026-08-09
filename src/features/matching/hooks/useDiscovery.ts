@@ -8,7 +8,7 @@ import {
   getDiscoverySegmentOptions,
 } from '../services/discoveryDomain';
 import { mapDiscoveryError } from '../services/discoveryErrors';
-import type { DiscoveryReferenceProfile, DiscoverySegment, PublicProfile } from '../types/discovery';
+import type { DiscoveryQuery, DiscoveryReferenceProfile, DiscoverySegment, PublicProfile } from '../types/discovery';
 
 type DiscoveryStatus = 'loading' | 'ready' | 'error';
 
@@ -28,11 +28,32 @@ export function useDiscovery(profile: UserProfile) {
     militaryType: profile.militaryType,
     militaryUnitId: null,
     militaryUnitName: profile.militaryUnit,
-  }), [profile]);
+  }), [
+    profile.departureCity,
+    profile.militaryCity,
+    profile.militaryPeriodMonth,
+    profile.militaryPeriodYear,
+    profile.militaryType,
+    profile.militaryUnit,
+    profile.residenceCity,
+    profile.uid,
+  ]);
+  const discoveryQuery = useMemo<DiscoveryQuery>(() => ({
+    militaryCity: profile.militaryCity,
+    militaryPeriodMonth: profile.militaryPeriodMonth,
+    militaryPeriodYear: profile.militaryPeriodYear,
+    militaryType: profile.militaryType,
+    militaryUnitId: null,
+  }), [
+    profile.militaryCity,
+    profile.militaryPeriodMonth,
+    profile.militaryPeriodYear,
+    profile.militaryType,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
-    void fetchPublicProfiles(reference)
+    void fetchPublicProfiles(discoveryQuery)
       .then((profiles) => {
         if (cancelled) return;
         setCandidates(profiles);
@@ -47,7 +68,7 @@ export function useDiscovery(profile: UserProfile) {
     return () => {
       cancelled = true;
     };
-  }, [reference, requestVersion]);
+  }, [discoveryQuery, requestVersion]);
 
   const rankedProfiles = useMemo(
     () => filterAndRankPublicProfiles(candidates, reference),

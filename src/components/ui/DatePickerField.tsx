@@ -31,7 +31,7 @@ export function DatePickerField({
   error,
   hint,
 }: DatePickerFieldProps) {
-  const { colors, radii, spacing } = useTheme();
+  const { colors, radii, resolvedScheme, spacing } = useTheme();
   const [showInlinePicker, setShowInlinePicker] = useState(false);
   const pickerValue = clampToMinimum(value, minimumDate);
   const displayValue = value ? formatStoredDate(localDateToStoredDate(value)) : 'Tarih seç';
@@ -61,7 +61,7 @@ export function DatePickerField({
         onPress={openPicker}
         style={({ pressed }) => ({
           alignItems: 'center',
-          backgroundColor: pressed ? colors.surfaceSubtle : colors.surface,
+          backgroundColor: pressed ? colors.surfaceSecondary : colors.inputBackground,
           borderColor: error ? colors.danger : colors.border,
           borderRadius: radii.md,
           borderWidth: 1,
@@ -78,7 +78,7 @@ export function DatePickerField({
       {showInlinePicker && Platform.OS !== 'android' ? (
         <View
           style={{
-            backgroundColor: colors.surface,
+            backgroundColor: colors.surfaceElevated,
             borderColor: colors.border,
             borderRadius: radii.md,
             borderWidth: 1,
@@ -91,6 +91,7 @@ export function DatePickerField({
             minimumDate={startOfLocalDay(minimumDate)}
             mode="date"
             display="inline"
+            themeVariant={resolvedScheme}
             onValueChange={(_event, selectedDate) => onValueChange(startOfLocalDay(selectedDate))}
           />
           <Pressable

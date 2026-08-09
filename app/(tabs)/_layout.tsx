@@ -20,12 +20,13 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={({ route }) => ({
+        freezeOnBlur: true,
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
           backgroundColor: colors.surface,
-          borderTopColor: colors.border,
+          borderTopColor: colors.divider,
           height: 64,
           paddingBottom: 8,
           paddingTop: 6,

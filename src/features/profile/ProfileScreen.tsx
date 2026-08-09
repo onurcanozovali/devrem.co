@@ -14,6 +14,7 @@ import { mapAuthError } from '@/features/auth/services/authErrors';
 import { useTheme } from '@/theme/ThemeProvider';
 import { ProfileEditModal } from './components/ProfileEditModal';
 import { AccountDeletionModal } from './components/AccountDeletionModal';
+import { ThemeSettingsCard } from './components/ThemeSettingsCard';
 import { useProfile } from './hooks/useProfile';
 import { useProfilePhotoURL } from './hooks/useProfilePhotoURL';
 import { militaryTypeLabels, monthLabels } from './profileOptions';
@@ -164,7 +165,7 @@ export function ProfileScreen() {
           onPress={() => setIsEditing(true)}
           style={({ pressed }) => ({
             alignItems: 'center',
-            backgroundColor: pressed ? colors.surfaceSubtle : colors.surface,
+            backgroundColor: pressed ? colors.surfaceSecondary : colors.surfaceElevated,
             borderColor: colors.border,
             borderRadius: radii.md,
             borderWidth: 1,
@@ -238,19 +239,21 @@ export function ProfileScreen() {
         <ProfileDetail label="Teslim tarihi" value={formatStoredDate(profile.reportingDate)} />
       </Card>
 
+      <ThemeSettingsCard />
+
       <Card style={{ gap: spacing.md }}>
         <AppText variant="subtitle" weight="700">Hesap</AppText>
         <AppText color="muted">Telefon numaran Firebase Authentication tarafından yönetilir ve profil belgesine kopyalanmaz.</AppText>
         {error ? <AppText color="danger" variant="caption" accessibilityLiveRegion="polite">{error}</AppText> : null}
         <Button label="Çıkış yap" loading={isLoggingOut} onPress={handleLogout} />
-        <View style={{ backgroundColor: colors.border, height: 1, marginVertical: spacing.sm }} />
+        <View style={{ backgroundColor: colors.divider, height: 1, marginVertical: spacing.sm }} />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Hesabı kalıcı olarak sil"
           onPress={() => setIsDeletingAccount(true)}
           style={({ pressed }) => ({
             alignItems: 'center',
-            backgroundColor: pressed ? colors.surfaceSubtle : 'transparent',
+            backgroundColor: pressed ? colors.surfaceSecondary : 'transparent',
             borderRadius: radii.sm,
             flexDirection: 'row',
             gap: spacing.sm,
@@ -278,6 +281,7 @@ export function ProfileScreen() {
           onClose={() => setIsDeletingAccount(false)}
         />
       ) : null}
+
     </ScreenContainer>
   );
 }
