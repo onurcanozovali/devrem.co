@@ -4,12 +4,13 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { getStorage } from 'firebase-admin/storage';
 import { initializeApp } from 'firebase-admin/app';
 import { logger } from 'firebase-functions';
-import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { deleteAccountData, getProfilePhotoPath, isAuthUserMissing } from './accountDeletion.js';
 import { deleteDevreGroupMembershipForUser, synchronizeDevreGroupMembership } from './devreGroups.js';
 import { deleteNotificationDataForUser, processDiscoveryMembershipChange } from './discoveryNotifications.js';
 import { synchronizePublicProfile } from './publicProfileSync.js';
+import { deleteGroupNotificationDataForUser, processGroupChatMessage } from './groupChatNotifications.js';
 
 initializeApp();
 
@@ -33,6 +34,25 @@ export const syncPublicProfile = onDocumentWritten(
       messaging: getMessaging(),
       sourceEventId: event.id,
       uid: event.params.uid,
+    });
+  },
+);
+
+export const notifyDevreGroupMessage = onDocumentCreated(
+  {
+    document: 'devreGroups/{groupId}/messages/{messageId}',
+    memory: '256MiB',
+    region: 'europe-west1',
+    retry: true,
+    timeoutSeconds: 120,
+  },
+  async (event) => {
+    await processGroupChatMessage({
+      database: getFirestore(),
+      groupId: event.params.groupId,
+      messageId: event.params.messageId,
+      messaging: getMessaging(),
+      value: event.data?.data() ?? null,
     });
   },
 );
@@ -89,7 +109,11 @@ export const deleteAccount = onRequest(
           await getFirestore().doc(`publicProfiles/${userId}`).delete();
         },
         deleteNotificationData: async (userId) => {
-          await deleteNotificationDataForUser(getFirestore(), userId);
+          const database = getFirestore();
+          await Promise.all([
+            deleteNotificationDataForUser(database, userId),
+            deleteGroupNotificationDataForUser(database, userId),
+          ]);
         },
         deleteDevreGroupMembership: async (userId) => {
           await deleteDevreGroupMembershipForUser(getFirestore(), userId);

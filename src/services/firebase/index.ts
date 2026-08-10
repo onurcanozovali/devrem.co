@@ -22,6 +22,12 @@ export {
   fetchCurrentDevreGroup,
   saveCommunicationPreference,
 } from './groups';
+export {
+  createDevreChatMessageDraft,
+  fetchOlderDevreChatMessages,
+  sendDevreChatMessage,
+  subscribeToRecentDevreChatMessages,
+} from './chat';
 export { deleteProfilePhoto, resolveProfilePhotoURL, uploadProfilePhoto } from './profilePhoto';
 export {
   deleteCurrentNotificationDevice,

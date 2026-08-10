@@ -55,6 +55,7 @@ export function NotificationSettingsScreen() {
     refreshPermission,
     setDiscoveryPreference,
     setEnabled,
+    setGroupMessagesEnabled,
     status,
   } = useNotifications();
   const isBusy = status === 'loading' || status === 'saving';
@@ -111,6 +112,21 @@ export function NotificationSettingsScreen() {
         {error ? (
           <AppText color="danger" variant="caption" accessibilityLiveRegion="polite">{error}</AppText>
         ) : null}
+      </Card>
+
+      <Card style={{ gap: spacing.sm }}>
+        <View style={{ gap: spacing.xs, paddingBottom: spacing.sm }}>
+          <AppText variant="subtitle" weight="800">Sohbet Bildirimleri</AppText>
+          <AppText color="muted" variant="caption">Grubundaki yeni mesajlardan haberdar ol.</AppText>
+        </View>
+        <View style={{ backgroundColor: colors.divider, height: 1 }} />
+        <PreferenceRow
+          description="Devre grubuna yeni mesaj geldiğinde bildir"
+          disabled={!preferences.enabled || isBusy}
+          label="Devre Grubu Mesajları"
+          onChange={(enabled) => void setGroupMessagesEnabled(enabled)}
+          value={preferences.groupMessagesEnabled}
+        />
       </Card>
 
       <Card style={{ gap: spacing.sm }}>
