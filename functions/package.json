@@ -8,6 +8,7 @@
   },
   "scripts": {
     "backfill:public-profiles": "pnpm run build && node lib/runPublicProfileBackfill.js",
+    "backfill:devre-groups": "pnpm run build && node lib/runDevreGroupBackfill.js",
     "baseline:discovery-notifications": "pnpm run build && node lib/runNotificationBaseline.js",
     "test:push": "pnpm run build && node lib/runPushSmokeTest.js",
     "seed:discovery:clear": "pnpm run build && node lib/runDiscoverySeed.js clear",
@@ -17,6 +18,7 @@
     "seed:discovery:verify": "pnpm run build && node lib/runDiscoverySeed.js verify"
   },
   "dependencies": {
+    "@devrem/devre-domain": "file:devre-domain",
     "firebase-admin": "^13.4.0",
     "firebase-functions": "^6.4.0"
   },

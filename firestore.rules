@@ -262,6 +262,26 @@ service cloud.firestore {
         && data.lastSeenAt is timestamp;
     }
 
+    function hasValidCommunicationPreferencesShape() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['allowDirectMessages', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['allowDirectMessages', 'createdAt', 'updatedAt'])
+        && data.allowDirectMessages is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function hasValidDevreGroupStateShape() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['acknowledgedGroupId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['acknowledgedGroupId', 'createdAt', 'updatedAt'])
+        && data.acknowledgedGroupId is string
+        && data.acknowledgedGroupId.size() >= 16
+        && data.acknowledgedGroupId.size() <= 100
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     match /users/{uid} {
       allow read: if isOwnProfile(uid);
 
@@ -366,6 +386,53 @@ service cloud.firestore {
         && request.resource.data.lastSeenAt == request.time;
 
       allow delete: if isOwnProfile(uid);
+    }
+
+    match /users/{uid}/communicationPreferences/{preferenceId} {
+      allow read: if isOwnProfile(uid) && preferenceId == 'main';
+      allow create: if isOwnProfile(uid)
+        && preferenceId == 'main'
+        && hasValidCommunicationPreferencesShape()
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isOwnProfile(uid)
+        && preferenceId == 'main'
+        && hasValidCommunicationPreferencesShape()
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isOwnProfile(uid) && preferenceId == 'main';
+    }
+
+    match /users/{uid}/devreGroupState/{stateId} {
+      allow read: if isOwnProfile(uid) && stateId == 'main';
+      allow create: if isOwnProfile(uid)
+        && stateId == 'main'
+        && hasValidDevreGroupStateShape()
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isOwnProfile(uid)
+        && stateId == 'main'
+        && hasValidDevreGroupStateShape()
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isOwnProfile(uid) && stateId == 'main';
+    }
+
+    match /_devreGroupMemberships/{uid} {
+      allow read: if isOwnProfile(uid);
+      allow create, update, delete: if false;
+    }
+
+    match /devreGroups/{groupId} {
+      allow read: if isSignedIn()
+        && exists(/databases/$(database)/documents/devreGroups/$(groupId)/members/$(request.auth.uid));
+      allow create, update, delete: if false;
+
+      match /members/{memberUid} {
+        allow read: if isSignedIn()
+          && exists(/databases/$(database)/documents/devreGroups/$(groupId)/members/$(request.auth.uid));
+        allow create, update, delete: if false;
+      }
     }
 
     match /{document=**} {

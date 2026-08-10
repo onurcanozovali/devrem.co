@@ -11,6 +11,9 @@ importers:
 
   .:
     dependencies:
+      '@devrem/devre-domain':
+        specifier: file:functions/devre-domain
+        version: link:functions/devre-domain
       '@expo/vector-icons':
         specifier: ^15.0.3
         version: 15.1.1(expo-font@57.0.1)(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
@@ -108,6 +111,9 @@ importers:
 
   functions:
     dependencies:
+      '@devrem/devre-domain':
+        specifier: file:devre-domain
+        version: link:devre-domain
       firebase-admin:
         specifier: ^13.4.0
         version: 13.10.0(@firebase/app-compat@0.5.16)(@firebase/app@0.16.0)
@@ -118,6 +124,8 @@ importers:
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
+
+  functions/devre-domain: {}
 
 packages:
 

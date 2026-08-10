@@ -15,6 +15,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { ProfileEditModal } from './components/ProfileEditModal';
 import { AccountDeletionModal } from './components/AccountDeletionModal';
 import { ThemeSettingsCard } from './components/ThemeSettingsCard';
+import { CommunicationPreferenceCard } from './components/CommunicationPreferenceCard';
 import { useProfile } from './hooks/useProfile';
 import { useProfilePhotoURL } from './hooks/useProfilePhotoURL';
 import { militaryTypeLabels, monthLabels } from './profileOptions';
@@ -240,6 +241,7 @@ export function ProfileScreen() {
       </Card>
 
       <ThemeSettingsCard />
+      <CommunicationPreferenceCard />
 
       <Card style={{ gap: spacing.md }}>
         <AppText variant="subtitle" weight="700">Hesap</AppText>

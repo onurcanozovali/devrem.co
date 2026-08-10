@@ -1,4 +1,5 @@
 import { getProvinceName, isProvinceCode } from '@/data/turkeyProvinces';
+import { hasExactDevreIdentity } from '@devrem/devre-domain';
 import { isValidProfilePhotoPath } from '@/features/profile/services/profilePhotoDomain';
 import {
   isValidMilitaryPeriod,
@@ -91,35 +92,11 @@ export function parsePublicProfileData(userId: string, value: unknown): PublicPr
   };
 }
 
-function normalizeTemporaryMilitaryUnitName(value: string | null): string | null {
-  return value ? normalizeWhitespace(value).toLocaleLowerCase('tr-TR') : null;
-}
-
-export function hasExactMilitaryUnitMatch(
-  reference: DiscoveryReferenceProfile,
-  candidate: PublicProfile,
-): boolean {
-  if (reference.militaryUnitId !== null || candidate.militaryUnitId !== null) {
-    return reference.militaryUnitId !== null
-      && candidate.militaryUnitId !== null
-      && reference.militaryUnitId === candidate.militaryUnitId;
-  }
-  const referenceUnit = normalizeTemporaryMilitaryUnitName(reference.militaryUnitName);
-  const candidateUnit = normalizeTemporaryMilitaryUnitName(candidate.militaryUnitName);
-  return referenceUnit !== null && candidateUnit !== null && referenceUnit === candidateUnit;
-}
-
 export function hasExactDevreMatch(
   reference: DiscoveryReferenceProfile,
   candidate: PublicProfile,
 ): boolean {
-  return isMilitaryType(reference.militaryType)
-    && isMilitaryType(candidate.militaryType)
-    && candidate.militaryPeriodYear === reference.militaryPeriodYear
-    && candidate.militaryPeriodMonth === reference.militaryPeriodMonth
-    && candidate.militaryCity === reference.militaryCity
-    && candidate.militaryType === reference.militaryType
-    && hasExactMilitaryUnitMatch(reference, candidate);
+  return hasExactDevreIdentity(reference, candidate);
 }
 
 export function getDiscoveryRelevanceScore(

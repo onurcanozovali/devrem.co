@@ -16,6 +16,12 @@ export {
   updateUserProfilePhotoPath,
 } from './firestore';
 export { discoveryPageSize, fetchPublicProfile, fetchPublicProfiles } from './discovery';
+export {
+  acknowledgeDevreGroup,
+  fetchCommunicationPreference,
+  fetchCurrentDevreGroup,
+  saveCommunicationPreference,
+} from './groups';
 export { deleteProfilePhoto, resolveProfilePhotoURL, uploadProfilePhoto } from './profilePhoto';
 export {
   deleteCurrentNotificationDevice,

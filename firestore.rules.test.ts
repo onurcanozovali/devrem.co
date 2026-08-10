@@ -70,6 +70,42 @@ async function seedPublicProfile(uid: string, year: number, month: number) {
   });
 }
 
+async function seedDevreGroup(groupId: string, memberIds: string[]) {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const database = context.firestore();
+    await setDoc(doc(database, 'devreGroups', groupId), {
+      groupId,
+      militaryPeriodYear: 2027,
+      militaryPeriodMonth: 2,
+      militaryCity: 6,
+      militaryType: 'standard',
+      militaryUnitId: null,
+      militaryUnitName: '1. Piyade Tugayı',
+      schemaVersion: 1,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    for (const uid of memberIds) {
+      await setDoc(doc(database, 'devreGroups', groupId, 'members', uid), {
+        uid,
+        source: 'backfill',
+        schemaVersion: 1,
+        joinedAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+      await setDoc(doc(database, '_devreGroupMemberships', uid), {
+        uid,
+        groupId,
+        identityKey: 'identity',
+        schemaVersion: 1,
+        source: 'backfill',
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+    }
+  });
+}
+
 before(async () => {
   environment = await initializeTestEnvironment({
     projectId,
@@ -260,4 +296,50 @@ test('trusted notification state remains inaccessible to clients', async () => {
     await assertFails(getDoc(doc(database, path)));
     await assertFails(setDoc(doc(database, path), { enabled: true }));
   }
+});
+
+test('communication preferences are owner-private and default-compatible', async () => {
+  await environment.clearFirestore();
+  const ownerDatabase = environment.authenticatedContext('user-1').firestore();
+  const reference = doc(ownerDatabase, 'users/user-1/communicationPreferences/main');
+  await assertSucceeds(setDoc(reference, {
+    allowDirectMessages: true,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(reference, { allowDirectMessages: false, updatedAt: serverTimestamp() }));
+  await assertFails(getDoc(doc(environment.authenticatedContext('user-2').firestore(), 'users/user-1/communicationPreferences/main')));
+  await assertFails(setDoc(doc(environment.authenticatedContext('user-2').firestore(), 'users/user-1/communicationPreferences/main'), {
+    allowDirectMessages: true,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }));
+});
+
+test('only group members can read a Devre group and its member list', async () => {
+  await environment.clearFirestore();
+  const groupId = `devre-v1-${'a'.repeat(64)}`;
+  await seedDevreGroup(groupId, ['user-1', 'user-2']);
+  const memberDatabase = environment.authenticatedContext('user-1').firestore();
+  await assertSucceeds(getDoc(doc(memberDatabase, 'devreGroups', groupId)));
+  const members = await assertSucceeds(getDocs(collection(memberDatabase, 'devreGroups', groupId, 'members')));
+  assert.equal(members.size, 2);
+  const outsiderDatabase = environment.authenticatedContext('user-3').firestore();
+  await assertFails(getDoc(doc(outsiderDatabase, 'devreGroups', groupId)));
+  await assertFails(getDocs(collection(outsiderDatabase, 'devreGroups', groupId, 'members')));
+});
+
+test('clients can read only their membership pointer and cannot mutate group membership', async () => {
+  await environment.clearFirestore();
+  const groupId = `devre-v1-${'b'.repeat(64)}`;
+  await seedDevreGroup(groupId, ['user-1']);
+  const ownerDatabase = environment.authenticatedContext('user-1').firestore();
+  await assertSucceeds(getDoc(doc(ownerDatabase, '_devreGroupMemberships', 'user-1')));
+  await assertFails(getDoc(doc(environment.authenticatedContext('user-2').firestore(), '_devreGroupMemberships', 'user-1')));
+  await assertFails(setDoc(doc(ownerDatabase, 'devreGroups', groupId, 'members', 'user-2'), {
+    uid: 'user-2',
+    joinedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(deleteDoc(doc(ownerDatabase, 'devreGroups', groupId, 'members', 'user-1')));
 });

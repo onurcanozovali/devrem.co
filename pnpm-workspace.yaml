@@ -1,6 +1,7 @@
 packages:
   - "."
   - "functions"
+  - "functions/devre-domain"
 minimumReleaseAge: 1440
 overrides:
   '@types/node': 26.1.2

@@ -1,4 +1,7 @@
 import type { PublicProfileProjection } from './publicProfile.js';
+import { getDevreIdentityKey, hasExactDevreIdentity } from '@devrem/devre-domain';
+
+export { hasExactDevreIdentity } from '@devrem/devre-domain';
 
 export const discoveryNotificationDailyLimit = 3;
 
@@ -38,42 +41,8 @@ export interface MembershipTransition {
 
 export type DeliveryReservationDecision = 'duplicate' | 'rate-limited' | 'send';
 
-const militaryTypes = ['standard', 'paid', 'reserveOfficer', 'reserveNco'] as const;
-
 function normalizeWhitespace(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
-}
-
-function normalizeTemporaryUnitName(value: string | null): string | null {
-  return value ? normalizeWhitespace(value).toLocaleLowerCase('tr-TR') : null;
-}
-
-function hasValidMilitaryType(value: unknown): boolean {
-  return typeof value === 'string' && militaryTypes.some((militaryType) => militaryType === value);
-}
-
-export function hasExactDevreIdentity(
-  reference: NotificationProfile,
-  candidate: NotificationProfile,
-): boolean {
-  if (
-    !hasValidMilitaryType(reference.militaryType)
-    || !hasValidMilitaryType(candidate.militaryType)
-    || reference.militaryPeriodYear !== candidate.militaryPeriodYear
-    || reference.militaryPeriodMonth !== candidate.militaryPeriodMonth
-    || reference.militaryCity !== candidate.militaryCity
-    || reference.militaryType !== candidate.militaryType
-  ) return false;
-
-  if (reference.militaryUnitId !== null || candidate.militaryUnitId !== null) {
-    return reference.militaryUnitId !== null
-      && candidate.militaryUnitId !== null
-      && reference.militaryUnitId === candidate.militaryUnitId;
-  }
-
-  const referenceUnit = normalizeTemporaryUnitName(reference.militaryUnitName);
-  const candidateUnit = normalizeTemporaryUnitName(candidate.militaryUnitName);
-  return referenceUnit !== null && candidateUnit !== null && referenceUnit === candidateUnit;
 }
 
 export function getDiscoveryNotificationReason(
@@ -94,19 +63,7 @@ export function getDiscoveryNotificationReason(
 }
 
 export function getMembershipFingerprint(profile: PublicProfileProjection | null): string | null {
-  if (!profile || !hasValidMilitaryType(profile.militaryType)) return null;
-  const normalizedUnitName = normalizeTemporaryUnitName(profile.militaryUnitName);
-  const unitIdentity = profile.militaryUnitId
-    ? `id:${normalizeWhitespace(profile.militaryUnitId)}`
-    : normalizedUnitName ? `name:${normalizedUnitName}` : null;
-  if (!unitIdentity) return null;
-  return JSON.stringify([
-    profile.militaryPeriodYear,
-    profile.militaryPeriodMonth,
-    profile.militaryCity,
-    profile.militaryType,
-    unitIdentity,
-  ]);
+  return getDevreIdentityKey(profile);
 }
 
 export function decideMembershipTransition(input: {

@@ -12,12 +12,14 @@
     "seed:discovery:clear": "pnpm --dir functions run seed:discovery:clear",
     "seed:discovery:verify": "pnpm --dir functions run seed:discovery:verify",
     "baseline:discovery-notifications": "pnpm --dir functions run baseline:discovery-notifications",
+    "backfill:devre-groups": "pnpm --dir functions run backfill:devre-groups",
     "test:push": "pnpm --dir functions run test:push",
     "test:theme": "tsx --test src/theme/colors.test.ts src/theme/themeMode.test.ts",
     "test:home": "tsx --test src/features/home/services/homeDomain.test.ts",
+    "test:groups": "tsx --test src/features/groups/services/groupDomain.test.ts",
     "test:matching": "tsx --test src/features/matching/services/discoveryDomain.test.ts",
     "test:notifications": "tsx --test src/features/notifications/services/notificationDomain.test.ts",
-    "test:functions": "tsx --test functions/test/accountDeletion.test.ts functions/test/discoveryNotificationDomain.test.ts functions/test/discoverySeed.test.ts functions/test/publicProfile.test.ts functions/test/pushSmokeTest.test.ts",
+    "test:functions": "tsx --test functions/test/accountDeletion.test.ts functions/test/devreGroups.test.ts functions/test/discoveryNotificationDomain.test.ts functions/test/discoverySeed.test.ts functions/test/publicProfile.test.ts functions/test/pushSmokeTest.test.ts",
     "test:preparation": "tsx --test src/features/preparation/services/preparationDomain.test.ts",
     "test:profile": "tsx --test src/features/profile/services/profileDomain.test.ts",
     "test:rules": "firebase emulators:exec --only firestore --project devrem-rules-test \"tsx --test firestore.rules.test.ts\"",
@@ -26,6 +28,7 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@devrem/devre-domain": "file:functions/devre-domain",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-firebase/app": "^26.1.0",

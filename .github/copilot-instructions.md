@@ -137,6 +137,8 @@ Do not implement future areas merely because they are mentioned here.
 
 Devre = same military period + same military city + same military unit + same military type. Residence and departure city are secondary relevance signals only after exact devre membership is established.
 
+Every exact Devre identity maps to one deterministic server-managed Devre group. There are no friend requests or manual group joins. Membership writes are trusted-backend only; discovery, notifications, and groups must use `@devrem/devre-domain` as the canonical identity implementation.
+
 Use canonical internal values and stable city/unit identifiers where available. Until every profile has a canonical `militaryUnitId`, normalized non-empty unit text may be used only as the documented temporary fallback; it never relaxes the other identity conditions.
 
 ## Preparation Feature
