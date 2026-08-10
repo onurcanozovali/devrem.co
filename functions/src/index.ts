@@ -1,11 +1,13 @@
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
 import { getStorage } from 'firebase-admin/storage';
 import { initializeApp } from 'firebase-admin/app';
 import { logger } from 'firebase-functions';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { deleteAccountData, getProfilePhotoPath, isAuthUserMissing } from './accountDeletion.js';
+import { deleteNotificationDataForUser, processDiscoveryMembershipChange } from './discoveryNotifications.js';
 import { synchronizePublicProfile } from './publicProfileSync.js';
 
 initializeApp();
@@ -18,9 +20,18 @@ export const syncPublicProfile = onDocumentWritten(
     memory: '256MiB',
     region: 'europe-west1',
     retry: true,
+    timeoutSeconds: 120,
   },
   async (event) => {
-    await synchronizePublicProfile(getFirestore(), event.params.uid);
+    const database = getFirestore();
+    await synchronizePublicProfile(database, event.params.uid);
+    await processDiscoveryMembershipChange({
+      beforePrivateProfile: event.data?.before.exists ? event.data.before.data() : null,
+      database,
+      messaging: getMessaging(),
+      sourceEventId: event.id,
+      uid: event.params.uid,
+    });
   },
 );
 
@@ -74,6 +85,9 @@ export const deleteAccount = onRequest(
         },
         deletePublicProfile: async (userId) => {
           await getFirestore().doc(`publicProfiles/${userId}`).delete();
+        },
+        deleteNotificationData: async (userId) => {
+          await deleteNotificationDataForUser(getFirestore(), userId);
         },
         deleteProfile: async (userId) => {
           const database = getFirestore();

@@ -18,7 +18,8 @@ class AppErrorBoundaryBase extends Component<AppErrorBoundaryBaseProps, State> {
 
   static getDerivedStateFromError(): State { return { hasError: true }; }
 
-  override componentDidCatch(_error: Error, _info: ErrorInfo): void {
+  override componentDidCatch(error: Error, info: ErrorInfo): void {
+    if (__DEV__) console.error('Unhandled Devrem render error.', error, info.componentStack);
     // Connect Crashlytics here in a later phase.
   }
 
