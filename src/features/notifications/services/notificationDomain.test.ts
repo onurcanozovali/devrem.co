@@ -35,7 +35,18 @@ test('deep-link payloads accept only semantic discovery profile targets', () => 
     target: 'profile',
     profileUserId: 'user-2',
     eventId: 'event-1',
-  }), { profileUserId: 'user-2', eventId: 'event-1' });
+  }), { profileUserId: 'user-2', eventId: 'event-1', target: 'profile' });
+  assert.deepEqual(parseNotificationTarget({
+    type: 'testDiscovery',
+    target: 'matching',
+    eventId: 'test-event-1',
+  }), { eventId: 'test-event-1', target: 'matching' });
+  assert.equal(parseNotificationTarget({
+    type: 'testDiscovery',
+    target: 'profile',
+    profileUserId: 'user-2',
+    eventId: 'test-event-1',
+  }), null);
   assert.equal(parseNotificationTarget({
     type: 'chat.message',
     target: 'profile',

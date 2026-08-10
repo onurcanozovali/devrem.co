@@ -312,6 +312,19 @@ Gerçek push akışı fiziksel Android ve iOS cihazlarda; foreground banner, bac
 terminated-app tap, token refresh, master kapatma ve logout senaryolarıyla doğrulanmalıdır. iOS Simulator
 gerçek APNs token testi için yeterli değildir.
 
+Development projesinde tek bir kullanıcının Android cihazlarına güvenilir Admin SDK ile push smoke testi:
+
+```powershell
+$env:GCLOUD_PROJECT = 'devrem-d985b'
+pnpm test:push --uid <firebaseUid>
+```
+
+Komut yalnızca `devrem-d985b` projesini kabul eder; açık UID verilmesini zorunlu tutar ve kullanıcının
+`notificationPreferences/main` belgesiyle aktif Android `devices` belgelerini okur. Master veya yeni-Devre
+tercihi kapalıysa gönderim yapmaz. Her benzersiz aktif Android token'ına tek bir `testDiscovery` bildirimi
+gönderir ve dokunulduğunda Devreni Bul sekmesini açar. Token'lar loglanmaz. Discovery matching,
+membership, delivery, dedup ve rate-limit koleksiyonlarına dokunulmaz; temizlenecek test belgesi oluşmaz.
+
 ## Tema ve UI kuralları
 
 - Renk, boşluk, radius ve tipografi değerleri `src/theme` üzerinden alınır.

@@ -11,7 +11,11 @@ export interface NotificationPreferences {
 
 export type NotificationPermissionState = 'authorized' | 'denied' | 'not-determined';
 
-export interface NotificationTarget {
+export type NotificationTarget = {
   eventId: string;
   profileUserId: string;
-}
+  target: 'profile';
+} | {
+  eventId: string;
+  target: 'matching';
+};

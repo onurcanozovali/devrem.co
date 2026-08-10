@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { RemoteMessage } from '@react-native-firebase/messaging';
-import { usePathname, useRouter } from 'expo-router';
+import { usePathname, useRouter, useSegments } from 'expo-router';
 import {
   createContext,
   type PropsWithChildren,
@@ -129,21 +129,29 @@ export function NotificationProvider({ children }: PropsWithChildren) {
   const { session, status: authStatus } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const segments = useSegments();
+  const navigationReady = segments.length > 0;
   const [preferences, setPreferences] = useState(defaultNotificationPreferences);
   const [permission, setPermission] = useState<NotificationPermissionState>('not-determined');
   const [status, setStatus] = useState<NotificationStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<ForegroundBanner | null>(null);
   const preferencesRef = useRef(preferences);
+  const pathnameRef = useRef(pathname);
   const userIdRef = useRef<string | null>(null);
   const writeQueueRef = useRef(Promise.resolve());
   const handledEventIdsRef = useRef(new Set<string>());
 
   useEffect(() => { preferencesRef.current = preferences; }, [preferences]);
+  useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
   useEffect(() => { userIdRef.current = session?.userId ?? null; }, [session?.userId]);
 
   const openTarget = useCallback((target: NotificationTarget) => {
     setBanner(null);
+    if (target.target === 'matching') {
+      router.navigate('/(tabs)/matching');
+      return;
+    }
     router.push({ pathname: '/devre/[userId]', params: { userId: target.profileUserId } });
   }, [router]);
 
@@ -195,7 +203,11 @@ export function NotificationProvider({ children }: PropsWithChildren) {
   }, [authStatus, session]);
 
   useEffect(() => {
-    if (authStatus !== 'authenticated' || !session) return undefined;
+    if (
+      authStatus !== 'authenticated'
+      || !session
+      || !navigationReady
+    ) return undefined;
     const handleOpenedMessage = (message: RemoteMessage) => {
       const target = readTarget(message);
       if (target) openTarget(target);
@@ -203,7 +215,7 @@ export function NotificationProvider({ children }: PropsWithChildren) {
     const unsubscribeOpened = subscribeToOpenedNotifications(handleOpenedMessage);
     const unsubscribeForeground = subscribeToForegroundNotifications((message) => {
       const target = readTarget(message);
-      if (!target || pathname === `/devre/${target.profileUserId}`) return;
+      if (!target || (target.target === 'profile' && pathnameRef.current === `/devre/${target.profileUserId}`)) return;
       setBanner({
         target,
         title: message.notification?.title ?? 'Yeni bir devren var',
@@ -215,15 +227,18 @@ export function NotificationProvider({ children }: PropsWithChildren) {
       if (!uid || !preferencesRef.current.enabled) return;
       void registerCurrentNotificationDevice(uid, token).catch(() => undefined);
     });
+    let initialNotificationTimeout: ReturnType<typeof setTimeout> | undefined;
     void getInitialOpenedNotification().then((message) => {
-      if (message) handleOpenedMessage(message);
+      if (!message) return;
+      initialNotificationTimeout = setTimeout(() => handleOpenedMessage(message), 0);
     }).catch(() => undefined);
     return () => {
+      if (initialNotificationTimeout) clearTimeout(initialNotificationTimeout);
       unsubscribeOpened();
       unsubscribeForeground();
       unsubscribeTokenRefresh();
     };
-  }, [authStatus, openTarget, pathname, readTarget, session]);
+  }, [authStatus, navigationReady, openTarget, readTarget, session]);
 
   useEffect(() => {
     if (!banner) return undefined;

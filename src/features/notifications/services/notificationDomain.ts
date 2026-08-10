@@ -36,6 +36,14 @@ export function parseNotificationPreferences(value: unknown): NotificationPrefer
 export function parseNotificationTarget(data: unknown): NotificationTarget | null {
   if (!isRecord(data)) return null;
   if (
+    data.type === 'testDiscovery'
+    && data.target === 'matching'
+    && typeof data.eventId === 'string'
+    && data.eventId.trim().length > 0
+  ) {
+    return { eventId: data.eventId, target: 'matching' };
+  }
+  if (
     data.type !== 'discovery.newDevre'
     || data.target !== 'profile'
     || typeof data.profileUserId !== 'string'
@@ -46,5 +54,6 @@ export function parseNotificationTarget(data: unknown): NotificationTarget | nul
   return {
     eventId: data.eventId,
     profileUserId: data.profileUserId,
+    target: 'profile',
   };
 }

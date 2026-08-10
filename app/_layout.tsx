@@ -57,25 +57,27 @@ function RootNavigator() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        contentStyle: { backgroundColor: colors.background },
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen name="index" />
-      <Stack.Protected guard={status === 'unauthenticated'}>
-        <Stack.Screen name="(auth)" />
-      </Stack.Protected>
-      <Stack.Protected guard={status === 'authenticated' && (profileStatus === 'missing' || profileStatus === 'incomplete')}>
-        <Stack.Screen name="onboarding" />
-      </Stack.Protected>
-      <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete'}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="devre/[userId]" />
-        <Stack.Screen name="notifications" />
-      </Stack.Protected>
-    </Stack>
+    <NotificationProvider>
+      <Stack
+        screenOptions={{
+          contentStyle: { backgroundColor: colors.background },
+          headerShown: false,
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Protected guard={status === 'unauthenticated'}>
+          <Stack.Screen name="(auth)" />
+        </Stack.Protected>
+        <Stack.Protected guard={status === 'authenticated' && (profileStatus === 'missing' || profileStatus === 'incomplete')}>
+          <Stack.Screen name="onboarding" />
+        </Stack.Protected>
+        <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete'}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="devre/[userId]" />
+          <Stack.Screen name="notifications" />
+        </Stack.Protected>
+      </Stack>
+    </NotificationProvider>
   );
 }
 
@@ -88,13 +90,11 @@ const DataProviders = memo(function DataProviders() {
   return (
     <AppErrorBoundary>
       <AuthProvider>
-        <NotificationProvider>
-          <ProfileProvider>
-            <PreparationProvider>
-              <RootNavigator />
-            </PreparationProvider>
-          </ProfileProvider>
-        </NotificationProvider>
+        <ProfileProvider>
+          <PreparationProvider>
+            <RootNavigator />
+          </PreparationProvider>
+        </ProfileProvider>
       </AuthProvider>
     </AppErrorBoundary>
   );
