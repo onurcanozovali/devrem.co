@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { getActiveDevreGroupChatId } from '@/features/groups/activeGroupChat';
 import {
   deleteCurrentNotificationDevice,
   fetchNotificationPreferences,
@@ -48,6 +49,7 @@ interface NotificationContextValue {
     enabled: boolean,
   ) => Promise<void>;
   setEnabled: (enabled: boolean) => Promise<void>;
+  setGroupMessagesEnabled: (enabled: boolean) => Promise<void>;
   status: NotificationStatus;
 }
 
@@ -148,6 +150,10 @@ export function NotificationProvider({ children }: PropsWithChildren) {
 
   const openTarget = useCallback((target: NotificationTarget) => {
     setBanner(null);
+    if (target.target === 'groupChat') {
+      router.navigate({ pathname: '/(tabs)/chats', params: { groupId: target.groupId } });
+      return;
+    }
     if (target.target === 'matching') {
       router.navigate('/(tabs)/matching');
       return;
@@ -215,7 +221,11 @@ export function NotificationProvider({ children }: PropsWithChildren) {
     const unsubscribeOpened = subscribeToOpenedNotifications(handleOpenedMessage);
     const unsubscribeForeground = subscribeToForegroundNotifications((message) => {
       const target = readTarget(message);
-      if (!target || (target.target === 'profile' && pathnameRef.current === `/devre/${target.profileUserId}`)) return;
+      if (
+        !target
+        || (target.target === 'profile' && pathnameRef.current === `/devre/${target.profileUserId}`)
+        || (target.target === 'groupChat' && getActiveDevreGroupChatId() === target.groupId)
+      ) return;
       setBanner({
         target,
         title: message.notification?.title ?? 'Yeni bir devren var',
@@ -337,6 +347,17 @@ export function NotificationProvider({ children }: PropsWithChildren) {
     }
   }, [persistPreferences]);
 
+  const setGroupMessagesEnabled = useCallback(async (enabled: boolean): Promise<void> => {
+    const previousPreferences = preferencesRef.current;
+    if (previousPreferences.groupMessagesEnabled === enabled) return;
+    const nextPreferences = { ...previousPreferences, groupMessagesEnabled: enabled };
+    try {
+      await persistPreferences(nextPreferences, previousPreferences);
+    } catch {
+      // The shared persistence path already restored state and exposed the error.
+    }
+  }, [persistPreferences]);
+
   const refreshPermission = useCallback(async (): Promise<void> => {
     try {
       const nextPermission = await getNotificationPermissionState();
@@ -357,8 +378,9 @@ export function NotificationProvider({ children }: PropsWithChildren) {
     refreshPermission,
     setDiscoveryPreference,
     setEnabled,
+    setGroupMessagesEnabled,
     status,
-  }), [error, permission, preferences, refreshPermission, setDiscoveryPreference, setEnabled, status]);
+  }), [error, permission, preferences, refreshPermission, setDiscoveryPreference, setEnabled, setGroupMessagesEnabled, status]);
 
   return (
     <NotificationContext.Provider value={value}>

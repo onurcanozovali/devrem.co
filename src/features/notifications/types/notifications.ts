@@ -7,6 +7,7 @@ export interface DiscoveryNotificationPreferences {
 export interface NotificationPreferences {
   discovery: DiscoveryNotificationPreferences;
   enabled: boolean;
+  groupMessagesEnabled: boolean;
 }
 
 export type NotificationPermissionState = 'authorized' | 'denied' | 'not-determined';
@@ -18,4 +19,8 @@ export type NotificationTarget = {
 } | {
   eventId: string;
   target: 'matching';
+} | {
+  eventId: string;
+  groupId: string;
+  target: 'groupChat';
 };

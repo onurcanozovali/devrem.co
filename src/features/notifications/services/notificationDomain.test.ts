@@ -12,6 +12,7 @@ import {
 test('notification preferences accept only the reusable discovery schema', () => {
   assert.deepEqual(parseNotificationPreferences({
     enabled: true,
+    groupMessagesEnabled: false,
     discovery: {
       newDevre: true,
       sameResidenceCity: false,
@@ -19,6 +20,7 @@ test('notification preferences accept only the reusable discovery schema', () =>
     },
   }), {
     enabled: true,
+    groupMessagesEnabled: false,
     discovery: {
       newDevre: true,
       sameResidenceCity: false,
@@ -27,6 +29,15 @@ test('notification preferences accept only the reusable discovery schema', () =>
   });
   assert.equal(parseNotificationPreferences({ enabled: true, discovery: { newDevre: true } }), null);
   assert.equal(defaultNotificationPreferences.enabled, false);
+  assert.equal(defaultNotificationPreferences.groupMessagesEnabled, true);
+  assert.equal(parseNotificationPreferences({
+    enabled: true,
+    discovery: {
+      newDevre: true,
+      sameResidenceCity: true,
+      sameDepartureCity: true,
+    },
+  })?.groupMessagesEnabled, true);
 });
 
 test('deep-link payloads accept only semantic discovery profile targets', () => {
@@ -41,6 +52,12 @@ test('deep-link payloads accept only semantic discovery profile targets', () => 
     target: 'matching',
     eventId: 'test-event-1',
   }), { eventId: 'test-event-1', target: 'matching' });
+  assert.deepEqual(parseNotificationTarget({
+    type: 'group.message',
+    target: 'groupChat',
+    groupId: `devre-v1-${'a'.repeat(64)}`,
+    eventId: 'message-event-1',
+  }), { eventId: 'message-event-1', groupId: `devre-v1-${'a'.repeat(64)}`, target: 'groupChat' });
   assert.equal(parseNotificationTarget({
     type: 'testDiscovery',
     target: 'profile',

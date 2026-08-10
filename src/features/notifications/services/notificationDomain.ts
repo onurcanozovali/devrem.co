@@ -5,6 +5,7 @@ import type {
 
 export const defaultNotificationPreferences: NotificationPreferences = {
   enabled: false,
+  groupMessagesEnabled: true,
   discovery: {
     newDevre: true,
     sameResidenceCity: true,
@@ -25,6 +26,9 @@ export function parseNotificationPreferences(value: unknown): NotificationPrefer
   ) return null;
   return {
     enabled: value.enabled,
+    groupMessagesEnabled: typeof value.groupMessagesEnabled === 'boolean'
+      ? value.groupMessagesEnabled
+      : true,
     discovery: {
       newDevre: value.discovery.newDevre,
       sameResidenceCity: value.discovery.sameResidenceCity,
@@ -35,6 +39,16 @@ export function parseNotificationPreferences(value: unknown): NotificationPrefer
 
 export function parseNotificationTarget(data: unknown): NotificationTarget | null {
   if (!isRecord(data)) return null;
+  if (
+    data.type === 'group.message'
+    && data.target === 'groupChat'
+    && typeof data.groupId === 'string'
+    && /^devre-v1-[a-f0-9]{64}$/.test(data.groupId)
+    && typeof data.eventId === 'string'
+    && data.eventId.trim().length > 0
+  ) {
+    return { eventId: data.eventId, groupId: data.groupId, target: 'groupChat' };
+  }
   if (
     data.type === 'testDiscovery'
     && data.target === 'matching'

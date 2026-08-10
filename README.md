@@ -359,6 +359,53 @@ pnpm backfill:devre-groups
 Backfill yalnızca `devrem-d985b` projesini kabul eder. Discovery delivery, dedup ve rate-limit belgelerine
 dokunmaz. Phase 4C yeni native dependency/config eklemediği için yeni EAS development build gerekmez.
 
+## Phase 4D: Devre grup sohbeti
+
+Her deterministik Devre grubunun metin mesajları `devreGroups/{groupId}/messages/{messageId}` altında tutulur.
+Mesajda `id`, `senderUid`, `text`, server `createdAt`, `clientCreatedAt` ve `schemaVersion` alanları bulunur.
+İstemci document ID'yi yazmadan önce üretir; başarısız gönderim aynı ID ile tekrarlandığı için optimistic UI ve
+retry yeni bir mesaj oluşturmaz. Son 40 mesaj realtime dinlenir, daha eski mesajlar `createdAt desc` cursor ile
+sayfalanır. Bu sorgu yalnızca otomatik tek-alan indeksini kullanır; yeni composite index gerekmez.
+
+Firestore Rules yalnızca `devreGroups/{groupId}/members/{request.auth.uid}` belgesi bulunan kullanıcılara mesaj
+okuma ve oluşturma izni verir. Gönderen UID'si Auth UID ile aynı olmalı, metin boş olmamalı ve en fazla 1500
+karakter olmalıdır. Mesaj update/delete işlemleri kapalıdır. Exact Devre kimliği değiştiğinde eski membership
+silindiği anda eski sohbet erişimi de kapanır.
+
+`notifyDevreGroupMessage` tek bir Firestore trigger'ıdır; alıcı başına Function oluşturmaz. Gönderen hariç grup
+üyelerini işler, master bildirim tercihiyle `groupMessagesEnabled` tercihini uygular ve mevcut owner-private cihaz
+kayıtlarını kullanır. Dedup anahtarı `groupId + messageId + recipientUid` olup
+`_groupMessageNotificationDeliveries` altında tutulur. Bu akış keşif günlük limit/dedup sayaçlarına dokunmaz.
+Bildirim deep link'i yalnızca doğrulanmış exact grup ID'siyle Devre Grubum sekmesine gider; kullanıcı artık o
+grubun üyesi değilse eski içerik gösterilmez. Aynı sohbet foreground'da açıksa banner bastırılır.
+
+Geliştirme projesinde mevcut bir gruba 10 veya 60 pagination mesajı eklemek için:
+
+```powershell
+$env:GCLOUD_PROJECT = 'devrem-d985b'
+pnpm seed:chat --group <devre-v1-group-id> --count 10
+pnpm seed:chat --group <devre-v1-group-id> --count 60
+pnpm seed:chat:clear --group <devre-v1-group-id>
+```
+
+Araç yalnızca `devrem-d985b` projesinde, açıkça verilen mevcut grubun gerçek üyelerini sender olarak kullanır.
+Fake üyelik/join event üretmez. Seed mesajları `developmentSeed: true` işaretlidir ve notification Function
+tarafından sessizce atlanır. Cleanup sadece deterministik `dev-chat-seed-*` ID'li ve bu işareti taşıyan belgeleri
+siler.
+
+Hesap silme ortak grup mesajlarını silmez; gönderenin public profili kaldırıldığında UI adı `Devre` olarak
+gösterir. Owner-private profil, tercih, cihaz ve kullanıcıya bağlı notification delivery verileri silinir.
+
+Deploy otomatik çalıştırılmaz. İnceleme ve doğrulama sonrasında gereken backend deploy:
+
+```powershell
+pnpm exec firebase deploy --only firestore:rules,functions:notifyDevreGroupMessage,functions:deleteAccount --project devrem-d985b
+```
+
+`_groupMessageNotificationDeliveries.expiresAt` için Firebase Console'dan TTL policy etkinleştirilmelidir.
+Phase 4D mevcut `@react-native-firebase/messaging` native modülünü kullanır; native dependency veya Expo config
+değişmediği için Phase 4B development build'i kuruluysa yeni EAS development build gerekmez.
+
 ## Tema ve UI kuralları
 
 - Renk, boşluk, radius ve tipografi değerleri `src/theme` üzerinden alınır.

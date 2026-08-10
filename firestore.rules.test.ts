@@ -16,6 +16,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -217,6 +219,7 @@ test('notification preferences are owner-private and preserve strict discovery k
   const preferenceReference = doc(ownerDatabase, 'users/user-1/notificationPreferences/main');
   await assertSucceeds(setDoc(preferenceReference, {
     enabled: true,
+    groupMessagesEnabled: true,
     discovery: {
       newDevre: true,
       sameResidenceCity: true,
@@ -292,6 +295,7 @@ test('trusted notification state remains inaccessible to clients', async () => {
     '_notificationMemberships/user-1',
     '_notificationDeliveries/event-1',
     '_notificationRateLimits/user-1_20260810',
+    '_groupMessageNotificationDeliveries/event-2',
   ]) {
     await assertFails(getDoc(doc(database, path)));
     await assertFails(setDoc(doc(database, path), { enabled: true }));
@@ -342,4 +346,54 @@ test('clients can read only their membership pointer and cannot mutate group mem
     updatedAt: serverTimestamp(),
   }));
   await assertFails(deleteDoc(doc(ownerDatabase, 'devreGroups', groupId, 'members', 'user-1')));
+});
+
+test('group messages are member-only, immutable, bounded, and sender-authenticated', async () => {
+  await environment.clearFirestore();
+  const groupId = `devre-v1-${'c'.repeat(64)}`;
+  await seedDevreGroup(groupId, ['user-1', 'user-2']);
+  const memberDatabase = environment.authenticatedContext('user-1').firestore();
+  const messageReference = doc(memberDatabase, 'devreGroups', groupId, 'messages', 'message-1');
+  await assertSucceeds(setDoc(messageReference, {
+    id: 'message-1',
+    senderUid: 'user-1',
+    text: 'Selam\ndevre',
+    createdAt: serverTimestamp(),
+    clientCreatedAt: Timestamp.now(),
+    schemaVersion: 1,
+  }));
+  await assertSucceeds(getDocs(query(
+    collection(memberDatabase, 'devreGroups', groupId, 'messages'),
+    orderBy('createdAt', 'desc'),
+    limit(40),
+  )));
+  await assertFails(updateDoc(messageReference, { text: 'değiştirildi' }));
+  await assertFails(deleteDoc(messageReference));
+
+  const outsiderDatabase = environment.authenticatedContext('user-3').firestore();
+  await assertFails(getDocs(collection(outsiderDatabase, 'devreGroups', groupId, 'messages')));
+  await assertFails(setDoc(doc(outsiderDatabase, 'devreGroups', groupId, 'messages', 'outsider'), {
+    id: 'outsider',
+    senderUid: 'user-3',
+    text: 'Yetkisiz',
+    createdAt: serverTimestamp(),
+    clientCreatedAt: Timestamp.now(),
+    schemaVersion: 1,
+  }));
+  await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'spoofed'), {
+    id: 'spoofed',
+    senderUid: 'user-2',
+    text: 'Sahte gönderen',
+    createdAt: serverTimestamp(),
+    clientCreatedAt: Timestamp.now(),
+    schemaVersion: 1,
+  }));
+  await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'blank'), {
+    id: 'blank',
+    senderUid: 'user-1',
+    text: '   ',
+    createdAt: serverTimestamp(),
+    clientCreatedAt: Timestamp.now(),
+    schemaVersion: 1,
+  }));
 });
