@@ -430,11 +430,13 @@ yetim medya otomatik silinmez.
 Backend deploy inceleme sonrasında şu kapsamla yapılmalıdır:
 
 ```powershell
-pnpm exec firebase deploy --only firestore:rules,firestore:indexes,storage,functions:notifyDevreGroupMessage,functions:cleanupDeletedDevreGroupMessageMedia,functions:deleteAccount --project devrem-d985b
+pnpm exec firebase deploy --only firestore:rules,storage,functions:syncPublicProfile,functions:notifyDevreGroupMessage,functions:cleanupDeletedDevreGroupMessageMedia,functions:deleteAccount --project devrem-d985b --force
 ```
 
 Storage Rules ilk kez Firestore cross-service kontrolü kullanırken Firebase CLI gerekli IAM rolünü etkinleştirmek
 için onay isteyebilir. Bu işlem deploy sırasında bilinçli olarak onaylanmalıdır.
+`--force`, `syncPublicProfile` için daha önce doğrulanan retry/failure policy değişikliğini onaylar. Bu kapsamda
+Firestore index dosyası değişmediği için index deployu gerekmez.
 
 `expo-audio`, kamera/mikrofon izinleri ve Android `adjustResize` native yapılandırmayı değiştirdiği için mevcut
 development client yeterli değildir. Android ve iOS için yeni development build gerekir:
