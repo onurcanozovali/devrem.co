@@ -14,6 +14,7 @@ function createDependencies(calls: string[]): AccountDeletionDependencies {
   return {
     deleteAvatar: async (uid) => { calls.push(`avatar:${uid}`); },
     deleteNotificationData: async (uid) => { calls.push(`notifications:${uid}`); },
+    deleteDevreGroupMembership: async (uid) => { calls.push(`group:${uid}`); },
     deletePublicProfile: async (uid) => { calls.push(`public:${uid}`); },
     deleteProfile: async (uid) => { calls.push(`profile:${uid}`); },
     deleteAuthUser: async (uid) => { calls.push(`auth:${uid}`); },
@@ -24,7 +25,7 @@ function createDependencies(calls: string[]): AccountDeletionDependencies {
 test('trusted deletion removes avatar and public projection before private and Auth data', async () => {
   const calls: string[] = [];
   await deleteAccountData('user-1', createDependencies(calls));
-  assert.deepEqual(calls, ['avatar:user-1', 'public:user-1', 'notifications:user-1', 'profile:user-1', 'auth:user-1']);
+  assert.deepEqual(calls, ['avatar:user-1', 'public:user-1', 'notifications:user-1', 'group:user-1', 'profile:user-1', 'auth:user-1']);
   assert.equal(getProfilePhotoPath('user-1'), 'users/user-1/profile/avatar.jpg');
 });
 
@@ -47,5 +48,5 @@ test('an already-missing Auth user keeps retries idempotent', async () => {
     throw { code: 'auth/user-not-found' };
   };
   await deleteAccountData('user-1', dependencies);
-  assert.deepEqual(calls, ['avatar:user-1', 'public:user-1', 'notifications:user-1', 'profile:user-1', 'auth-missing']);
+  assert.deepEqual(calls, ['avatar:user-1', 'public:user-1', 'notifications:user-1', 'group:user-1', 'profile:user-1', 'auth-missing']);
 });

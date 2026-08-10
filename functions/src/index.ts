@@ -7,6 +7,7 @@ import { logger } from 'firebase-functions';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { deleteAccountData, getProfilePhotoPath, isAuthUserMissing } from './accountDeletion.js';
+import { deleteDevreGroupMembershipForUser, synchronizeDevreGroupMembership } from './devreGroups.js';
 import { deleteNotificationDataForUser, processDiscoveryMembershipChange } from './discoveryNotifications.js';
 import { synchronizePublicProfile } from './publicProfileSync.js';
 
@@ -25,6 +26,7 @@ export const syncPublicProfile = onDocumentWritten(
   async (event) => {
     const database = getFirestore();
     await synchronizePublicProfile(database, event.params.uid);
+    await synchronizeDevreGroupMembership(database, event.params.uid, 'live');
     await processDiscoveryMembershipChange({
       beforePrivateProfile: event.data?.before.exists ? event.data.before.data() : null,
       database,
@@ -88,6 +90,9 @@ export const deleteAccount = onRequest(
         },
         deleteNotificationData: async (userId) => {
           await deleteNotificationDataForUser(getFirestore(), userId);
+        },
+        deleteDevreGroupMembership: async (userId) => {
+          await deleteDevreGroupMembershipForUser(getFirestore(), userId);
         },
         deleteProfile: async (userId) => {
           const database = getFirestore();

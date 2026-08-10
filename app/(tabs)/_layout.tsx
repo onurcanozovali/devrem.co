@@ -10,7 +10,7 @@ const tabIcons: Record<string, IconName> = {
   index: 'home-outline',
   preparation: 'checkmark-circle-outline',
   matching: 'people-outline',
-  chats: 'chatbubbles-outline',
+  chats: 'people-circle-outline',
   profile: 'person-outline',
 };
 
@@ -40,7 +40,7 @@ export default function TabLayout() {
       <Tabs.Screen name="index" options={{ title: 'Ana Sayfa' }} />
       <Tabs.Screen name="preparation" options={{ title: 'Hazırlık' }} />
       <Tabs.Screen name="matching" options={{ title: 'Devreni Bul' }} />
-      <Tabs.Screen name="chats" options={{ title: 'Sohbetler' }} />
+      <Tabs.Screen name="chats" options={{ title: 'Devre Grubum' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
     </Tabs>
   );

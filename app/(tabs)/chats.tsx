@@ -1,3 +1,3 @@
-import { ChatScreen } from '@/features/chat/ChatScreen';
+import { GroupScreen } from '@/features/groups/GroupScreen';
 
-export default ChatScreen;
+export default GroupScreen;

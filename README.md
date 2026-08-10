@@ -325,6 +325,40 @@ tercihi kapalıysa gönderim yapmaz. Her benzersiz aktif Android token'ına tek 
 gönderir ve dokunulduğunda Devreni Bul sekmesini açar. Token'lar loglanmaz. Discovery matching,
 membership, delivery, dedup ve rate-limit koleksiyonlarına dokunulmaz; temizlenecek test belgesi oluşmaz.
 
+## Phase 4C: Devre grupları
+
+Her exact Devre kimliği `@devrem/devre-domain` tarafından tek bir canonical identity key'e dönüştürülür.
+Backend bu anahtarın SHA-256 özetiyle `devre-v1-<hash>` biçiminde deterministik grup ID'si üretir.
+İkamet ve hareket şehirleri grup kimliğine dahil değildir. Stable `militaryUnitId` varsa birlik adı yerine o
+kullanılır; mevcut veride ID yoksa normalize edilmiş birlik adı geçici fallback'tir.
+
+Firestore modeli:
+
+```text
+devreGroups/{groupId}
+devreGroups/{groupId}/members/{uid}
+_devreGroupMemberships/{uid}                 # owner-readable trusted pointer
+users/{uid}/devreGroupState/main             # one-time bilgi durumu
+users/{uid}/communicationPreferences/main    # allowDirectMessages
+```
+
+`syncPublicProfile` aynı retry-safe akışta grup ve üyeliği ensure eder. Canonical kimlik değişirse eski
+membership silinir ve yenisi oluşturulur; profil exact kimliğini kaybederse membership kaldırılır. Üye sayacı
+tutulmaz. Boş deterministic gruplar audit/reconciliation kolaylığı için korunur. Client grup veya membership
+yazamaz ve yalnızca gerçekten üyesi olduğu grubun metadata/member belgelerini okuyabilir.
+
+Mevcut kullanıcı ve development seed üyeliklerini notification üretmeden, tekrar çalıştırılabilir şekilde
+backfill etmek için:
+
+```powershell
+$env:GCLOUD_PROJECT = 'devrem-d985b'
+$env:DEVREM_GROUP_BACKFILL_CONFIRM = 'devrem-d985b'
+pnpm backfill:devre-groups
+```
+
+Backfill yalnızca `devrem-d985b` projesini kabul eder. Discovery delivery, dedup ve rate-limit belgelerine
+dokunmaz. Phase 4C yeni native dependency/config eklemediği için yeni EAS development build gerekmez.
+
 ## Tema ve UI kuralları
 
 - Renk, boşluk, radius ve tipografi değerleri `src/theme` üzerinden alınır.

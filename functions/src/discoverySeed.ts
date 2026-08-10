@@ -1,4 +1,5 @@
 import { deflateSync } from 'node:zlib';
+import { deleteDevreGroupMembershipForUser, synchronizeDevreGroupMembership } from './devreGroups.js';
 
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 
@@ -225,6 +226,9 @@ export async function seedDiscoveryProfiles(
     batch.set(database.doc(`publicProfiles/${id}`), { ...profile, updatedAt: FieldValue.serverTimestamp() });
   }
   await batch.commit();
+  await Promise.all(profiles.map(({ id }) => (
+    synchronizeDevreGroupMembership(database, id, 'development-seed')
+  )));
   await Promise.all(profiles.filter(({ hasAvatar }) => hasAvatar).map(({ id }, index) => (
     bucket.file(`users/${id}/profile/avatar.jpg`).save(createSeedAvatar(index), {
       contentType: 'image/png',
@@ -293,6 +297,7 @@ export async function clearDiscoveryProfiles(database: Firestore, bucket: SeedBu
   const seededIds = markerSnapshot.get('seededIds') as string[];
   const avatarIds = markerSnapshot.get('avatarIds') as string[];
   const batch = database.batch();
+  await Promise.all(seededIds.map((id) => deleteDevreGroupMembershipForUser(database, id)));
   for (const id of seededIds) batch.delete(database.doc(`publicProfiles/${id}`));
   await batch.commit();
   await Promise.all(avatarIds.map((id) => (
