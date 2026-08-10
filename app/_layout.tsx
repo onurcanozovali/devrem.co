@@ -1,7 +1,6 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { memo } from 'react';
-import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -106,11 +105,9 @@ const DataProviders = memo(function DataProviders() {
 
 export default function RootLayout() {
   return (
-    <KeyboardProvider>
-      <ThemeProvider>
-        <ThemedStatusBar />
-        <DataProviders />
-      </ThemeProvider>
-    </KeyboardProvider>
+    <ThemeProvider>
+      <ThemedStatusBar />
+      <DataProviders />
+    </ThemeProvider>
   );
 }

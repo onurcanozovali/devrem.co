@@ -1,4 +1,5 @@
 export const DEVRE_CHAT_MESSAGE_MAX_LENGTH = 1500;
+export const DEVRE_CHAT_MESSAGE_PREVIEW_LENGTH = 420;
 export const DEVRE_CHAT_AUDIO_MAX_DURATION_MS = 3 * 60 * 1000;
 export const DEVRE_CHAT_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
 
@@ -48,6 +49,12 @@ export function validateDevreChatText(value: string): string | null {
     return `Mesaj en fazla ${DEVRE_CHAT_MESSAGE_MAX_LENGTH} karakter olabilir.`;
   }
   return null;
+}
+
+export function collapseDevreChatText(value: string): string | null {
+  const characters = Array.from(value);
+  if (characters.length <= DEVRE_CHAT_MESSAGE_PREVIEW_LENGTH) return null;
+  return `${characters.slice(0, DEVRE_CHAT_MESSAGE_PREVIEW_LENGTH).join('').trimEnd()}…`;
 }
 
 function messageTime(message: DevreChatMessage): number {

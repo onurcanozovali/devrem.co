@@ -438,7 +438,7 @@ için onay isteyebilir. Bu işlem deploy sırasında bilinçli olarak onaylanmal
 `--force`, `syncPublicProfile` için daha önce doğrulanan retry/failure policy değişikliğini onaylar. Bu kapsamda
 Firestore index dosyası değişmediği için index deployu gerekmez.
 
-`expo-audio`, kamera/mikrofon izinleri ve Android `adjustResize` native yapılandırmayı değiştirdiği için mevcut
+`expo-camera`, belge seçimi ve Android `adjustResize` native yapılandırmayı değiştirdiği için mevcut
 development client yeterli değildir. Android ve iOS için yeni development build gerekir:
 
 ```bash
@@ -474,11 +474,11 @@ ve okundu göstergesi üye x mesaj write patlaması oluşturmadan türetilir. Ku
 silindiğinde eski cursor trusted membership senkronizasyonu tarafından kaldırılır.
 
 Kamera artık `expo-camera` `CameraView` ile Devrem'e ait photo-only arayüzdür. Belge seçimi `expo-document-picker`,
-güvenli cihaz açma/paylaşma yüzeyi `expo-sharing`, kopyalama `expo-clipboard`, klavye senkronizasyonu ise
-`react-native-keyboard-controller` kullanır. Klavye denetleyicisinin native eş bağımlılıkları
-`react-native-reanimated` ve `react-native-worklets` doğrudan sabitlenmiştir. Android prebuild manifestinde
-`CAMERA`, `RECORD_AUDIO` ve `adjustResize` doğrulanmıştır. Bu native değişikliklerin tamamı yeni development build
-gerektirir; eski APK'ya JS update göndermek mikrofon/kamera izinlerini eklemez.
+güvenli cihaz açma/paylaşma yüzeyi `expo-sharing`, kopyalama `expo-clipboard` kullanır. Composer gerçek layout
+akışında tutulur; Android `adjustResize`, iOS `KeyboardAvoidingView` ile mesaj listesinin üstüne binmeden klavyeye
+uyum sağlar. Ses kaydı üründen çıkarılmış, mikrofon izni kaldırılmıştır; eski sesli mesajlar geriye uyumlu olarak
+oynatılabilir. Android prebuild manifestinde `CAMERA` ve `adjustResize` doğrulanmıştır. Bu native değişikliklerin
+tamamı yeni development build gerektirir; eski APK'ya JS update göndermek native izinleri değiştirmez.
 
 ## Tema ve UI kuralları
 

@@ -5,6 +5,8 @@ import test from 'node:test';
 
 import {
   DEVRE_CHAT_MESSAGE_MAX_LENGTH,
+  DEVRE_CHAT_MESSAGE_PREVIEW_LENGTH,
+  collapseDevreChatText,
   formatChatDate,
   isSameMessageCluster,
   mergeDevreChatMessages,
@@ -43,6 +45,12 @@ test('chat text rejects empty and oversized messages', () => {
     assert.ok(validateDevreChatText('a'.repeat(DEVRE_CHAT_MESSAGE_MAX_LENGTH + 1)));
     assert.equal(validateDevreChatText('geçerli'), null);
   });
+
+test('long chat text has a bounded expandable preview without splitting emoji', () => {
+  assert.equal(collapseDevreChatText('kısa mesaj'), null);
+  const preview = collapseDevreChatText(`${'a'.repeat(DEVRE_CHAT_MESSAGE_PREVIEW_LENGTH - 1)}😀devam`);
+  assert.equal(preview, `${'a'.repeat(DEVRE_CHAT_MESSAGE_PREVIEW_LENGTH - 1)}😀…`);
+});
 
 test('chat merge reconciles realtime and optimistic messages without duplicates', () => {
     const optimistic = message('same-id', 1, 'pending');
