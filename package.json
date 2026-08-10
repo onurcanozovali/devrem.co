@@ -25,7 +25,7 @@
     "test:preparation": "tsx --test src/features/preparation/services/preparationDomain.test.ts",
     "test:profile": "tsx --test src/features/profile/services/profileDomain.test.ts",
     "test:rules": "firebase emulators:exec --only firestore --project devrem-rules-test \"tsx --test firestore.rules.test.ts\"",
-    "test:storage-rules": "firebase emulators:exec --only storage --project devrem-storage-rules-test \"tsx --test storage.rules.test.ts\"",
+    "test:storage-rules": "firebase emulators:exec --only firestore,storage --project devrem-storage-rules-test \"tsx --test storage.rules.test.ts\"",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint"
   },
@@ -39,6 +39,8 @@
     "@react-native-firebase/messaging": "^26.1.0",
     "@react-native-firebase/storage": "^26.1.0",
     "expo": "~57.0.11",
+    "expo-asset": "~57.0.9",
+    "expo-audio": "~57.0.3",
     "expo-build-properties": "~57.0.6",
     "expo-constants": "~57.0.9",
     "expo-dev-client": "~57.0.10",

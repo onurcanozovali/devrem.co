@@ -2,6 +2,11 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    function isDevreGroupMember(groupId) {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/devreGroups/$(groupId)/members/$(request.auth.uid));
+    }
+
     match /users/{uid}/profile/avatar.jpg {
       allow read: if request.auth != null;
 
@@ -11,6 +16,32 @@ service firebase.storage {
         && request.resource.contentType == 'image/jpeg';
 
       allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /devreGroups/{groupId}/media/{messageId}/image.jpg {
+      allow read: if isDevreGroupMember(groupId);
+      allow create, update: if isDevreGroupMember(groupId)
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType == 'image/jpeg'
+        && request.resource.metadata.kind == 'image'
+        && request.resource.metadata.messageId == messageId
+        && request.resource.metadata.senderUid == request.auth.uid
+        && (resource == null || resource.metadata.senderUid == request.auth.uid);
+      allow delete: if isDevreGroupMember(groupId)
+        && resource.metadata.senderUid == request.auth.uid;
+    }
+
+    match /devreGroups/{groupId}/media/{messageId}/audio.m4a {
+      allow read: if isDevreGroupMember(groupId);
+      allow create, update: if isDevreGroupMember(groupId)
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('audio/(mp4|m4a|x-m4a|aac)')
+        && request.resource.metadata.kind == 'audio'
+        && request.resource.metadata.messageId == messageId
+        && request.resource.metadata.senderUid == request.auth.uid
+        && (resource == null || resource.metadata.senderUid == request.auth.uid);
+      allow delete: if isDevreGroupMember(groupId)
+        && resource.metadata.senderUid == request.auth.uid;
     }
 
     match /{allPaths=**} {

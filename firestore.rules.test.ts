@@ -357,10 +357,11 @@ test('group messages are member-only, immutable, bounded, and sender-authenticat
   await assertSucceeds(setDoc(messageReference, {
     id: 'message-1',
     senderUid: 'user-1',
+    type: 'text',
     text: 'Selam\ndevre',
     createdAt: serverTimestamp(),
     clientCreatedAt: Timestamp.now(),
-    schemaVersion: 1,
+    schemaVersion: 2,
   }));
   await assertSucceeds(getDocs(query(
     collection(memberDatabase, 'devreGroups', groupId, 'messages'),
@@ -375,25 +376,46 @@ test('group messages are member-only, immutable, bounded, and sender-authenticat
   await assertFails(setDoc(doc(outsiderDatabase, 'devreGroups', groupId, 'messages', 'outsider'), {
     id: 'outsider',
     senderUid: 'user-3',
+    type: 'text',
     text: 'Yetkisiz',
     createdAt: serverTimestamp(),
     clientCreatedAt: Timestamp.now(),
-    schemaVersion: 1,
+    schemaVersion: 2,
   }));
   await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'spoofed'), {
     id: 'spoofed',
     senderUid: 'user-2',
+    type: 'text',
     text: 'Sahte gönderen',
     createdAt: serverTimestamp(),
     clientCreatedAt: Timestamp.now(),
-    schemaVersion: 1,
+    schemaVersion: 2,
   }));
   await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'blank'), {
     id: 'blank',
     senderUid: 'user-1',
+    type: 'text',
     text: '   ',
     createdAt: serverTimestamp(),
     clientCreatedAt: Timestamp.now(),
-    schemaVersion: 1,
+    schemaVersion: 2,
+  }));
+  await assertSucceeds(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'image-1'), {
+    id: 'image-1', senderUid: 'user-1', type: 'image',
+    mediaPath: `devreGroups/${groupId}/media/image-1/image.jpg`, caption: '', width: 1600, height: 900,
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 2,
+  }));
+  await assertSucceeds(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'audio-1'), {
+    id: 'audio-1', senderUid: 'user-1', type: 'audio',
+    mediaPath: `devreGroups/${groupId}/media/audio-1/audio.m4a`, durationMillis: 17000,
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 2,
+  }));
+  await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'bad-media'), {
+    id: 'bad-media', senderUid: 'user-1', type: 'image', mediaPath: 'other/private.jpg', caption: '', width: 800, height: 600,
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 2,
+  }));
+  await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'too-long'), {
+    id: 'too-long', senderUid: 'user-1', type: 'text', text: 'a'.repeat(1501),
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 2,
   }));
 });

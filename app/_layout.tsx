@@ -74,6 +74,9 @@ function RootNavigator() {
         <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete'}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="devre/[userId]" />
+          <Stack.Screen name="group-chat/[groupId]" />
+          <Stack.Screen name="group-info/[groupId]" />
+          <Stack.Screen name="group-media/[groupId]" />
           <Stack.Screen name="notifications" />
         </Stack.Protected>
       </Stack>

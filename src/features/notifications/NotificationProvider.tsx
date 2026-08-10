@@ -151,7 +151,7 @@ export function NotificationProvider({ children }: PropsWithChildren) {
   const openTarget = useCallback((target: NotificationTarget) => {
     setBanner(null);
     if (target.target === 'groupChat') {
-      router.navigate({ pathname: '/(tabs)/chats', params: { groupId: target.groupId } });
+      router.navigate({ pathname: '/group-chat/[groupId]', params: { groupId: target.groupId } });
       return;
     }
     if (target.target === 'matching') {

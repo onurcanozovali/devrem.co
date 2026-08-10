@@ -12,7 +12,8 @@
     },
     "android": {
       "package": "com.devrem.app",
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
       "expo-router",
@@ -22,8 +23,17 @@
         "expo-image-picker",
         {
           "photosPermission": "Devrem, profil fotoğrafını seçebilmen için fotoğraflarına erişir.",
-          "cameraPermission": false,
+          "cameraPermission": "Devrem, Devre grubunda fotoğraf paylaşabilmen için kameraya erişir.",
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Devrem, Devre grubuna sesli mesaj kaydedebilmen için mikrofona erişir.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
         }
       ],
       "@react-native-firebase/app",

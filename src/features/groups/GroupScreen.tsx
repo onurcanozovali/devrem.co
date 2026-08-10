@@ -1,48 +1,25 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { LoadingState } from '@/components/common/LoadingState';
 import { ScreenContainer } from '@/components/common/ScreenContainer';
 import { AppText } from '@/components/ui/AppText';
+import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { useAuth } from '@/features/auth/hooks/useAuth';
-import { useProfile } from '@/features/profile/hooks/useProfile';
-import { acknowledgeDevreGroup, fetchCurrentDevreGroup } from '@/services/firebase';
+import { getProvinceName } from '@/data/turkeyProvinces';
+import { militaryTypeLabels, monthLabels } from '@/features/profile/profileOptions';
+import { acknowledgeDevreGroup } from '@/services/firebase';
 import { useTheme } from '@/theme/ThemeProvider';
-import { GroupChat } from './GroupChat';
-import type { DevreGroupResult } from './types/groups';
+import { useCurrentDevreGroup } from './useCurrentDevreGroup';
 
 export function GroupScreen() {
-  const { groupId: requestedGroupId } = useLocalSearchParams<{ groupId?: string }>();
-  const { session } = useAuth();
-  const { profile } = useProfile();
-  const { spacing } = useTheme();
-  const [result, setResult] = useState<DevreGroupResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { colors, spacing } = useTheme();
+  const { error, profile, result, retry, session, setResult } = useCurrentDevreGroup();
   const [acknowledgementError, setAcknowledgementError] = useState<string | null>(null);
-  const [requestVersion, setRequestVersion] = useState(0);
-  const profileIdentityVersion = profile
-    ? `${profile.militaryPeriodYear}:${profile.militaryPeriodMonth}:${profile.militaryCity}:${profile.militaryType}:${profile.militaryUnit ?? ''}`
-    : '';
-
-  useEffect(() => {
-    if (!session) return;
-    let cancelled = false;
-    void fetchCurrentDevreGroup(session.userId).then((nextResult) => {
-      if (!cancelled) { setResult(nextResult); setError(null); }
-    }).catch(() => {
-      if (!cancelled) setError('Devre grubun yüklenemedi. İnternet bağlantını kontrol edip tekrar dene.');
-    });
-    return () => { cancelled = true; };
-  }, [profileIdentityVersion, requestVersion, session]);
-
-  const retry = useCallback(() => {
-    setResult(null);
-    setError(null);
-    setRequestVersion((current) => current + 1);
-  }, []);
 
   if (!profile?.militaryUnit) {
     return <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}><EmptyState title="Devre grubun henüz oluşmadı" description="Birlik bilgin tamamlandığında grubun otomatik olarak hazırlanacak." /></ScreenContainer>;
@@ -57,39 +34,38 @@ export function GroupScreen() {
     return <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}><EmptyState title="Devre grubun hazırlanıyor" description="Profilin işlendiğinde grubun otomatik olarak burada görünecek." actionLabel="Tekrar kontrol et" onAction={retry} /></ScreenContainer>;
   }
   const { group } = result;
-  if (requestedGroupId && requestedGroupId !== group.groupId) {
-    return (
-      <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}>
-        <EmptyState
-          title="Bu grup artık erişilebilir değil"
-          description="Devre bilgin değiştiyse eski grubun mesajları korunur ancak erişimin hemen kapanır."
-          actionLabel="Güncel grubumu aç"
-          onAction={() => router.replace('/(tabs)/chats')}
-        />
-      </ScreenContainer>
-    );
-  }
+  const openChat = () => router.push({ pathname: '/group-chat/[groupId]', params: { groupId: group.groupId } });
   const acknowledge = async () => {
     if (!session) return;
     setAcknowledgementError(null);
     try {
       await acknowledgeDevreGroup(session.userId, group.groupId);
       setResult({ ...result, acknowledged: true });
+      openChat();
     } catch {
       setAcknowledgementError('Grup bilgisi kaydedilemedi. Tekrar dene.');
     }
   };
-  if (!result.acknowledged) {
-    return (
-      <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}>
-        <Card style={{ gap: spacing.md }}>
-          <AppText variant="title" weight="900">Devre grubun hazır.</AppText>
-          <AppText color="muted">Aynı birlik ve dönemdeki kişilerle burada konuşabilirsin.</AppText>
+
+  return (
+    <ScreenContainer contentContainerStyle={{ gap: spacing.lg, paddingBottom: spacing.xl }}>
+      <View style={{ gap: spacing.xs, paddingTop: spacing.md }}>
+        <AppText variant="title" weight="900">Devre Grubum</AppText>
+        <AppText color="muted">Canonical Devre grubun ve ortak sohbet alanın.</AppText>
+      </View>
+      <Card style={{ gap: spacing.lg }}>
+          <Pressable accessibilityRole="button" onPress={result.acknowledged ? openChat : () => void acknowledge()} style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.md }}>
+            <Avatar accessibilityLabel="Devre grubu" imageURL={null} initials={(group.militaryUnitName ?? 'D').charAt(0)} size={64} />
+            <View style={{ flex: 1, gap: spacing.xs }}>
+              <AppText variant="subtitle" weight="900">{group.militaryUnitName ?? 'Devre Grubu'}</AppText>
+              <AppText color="muted">{group.members.length} üye · {getProvinceName(group.militaryCity)}</AppText>
+              <AppText variant="caption">{monthLabels[group.militaryPeriodMonth - 1]} {group.militaryPeriodYear} · {militaryTypeLabels[group.militaryType]}</AppText>
+            </View>
+            <Ionicons color={colors.primary} name="chevron-forward" size={24} />
+          </Pressable>
           {acknowledgementError ? <AppText color="danger" variant="caption">{acknowledgementError}</AppText> : null}
-          <Button label="Grubu Gör" onPress={() => void acknowledge()} />
-        </Card>
-      </ScreenContainer>
-    );
-  }
-  return session ? <GroupChat key={group.groupId} group={group} userId={session.userId} /> : null;
+          <Button label={result.acknowledged ? 'Sohbeti Aç' : 'Grubu Gör'} onPress={result.acknowledged ? openChat : () => void acknowledge()} />
+      </Card>
+    </ScreenContainer>
+  );
 }

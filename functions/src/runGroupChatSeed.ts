@@ -60,12 +60,13 @@ async function seedMessages(): Promise<number> {
     batch.set(database.doc(`devreGroups/${groupId}/messages/${id}`), {
       id,
       senderUid: senderUids[index % senderUids.length],
+      type: 'text',
       text: index % 7 === 0
         ? `Geliştirme mesajı ${index + 1}\nÇok satırlı sohbet testi.`
         : `Geliştirme mesajı ${index + 1}`,
       createdAt: timestamp,
       clientCreatedAt: timestamp,
-      schemaVersion: 1,
+      schemaVersion: 2,
       developmentSeed: true,
     });
   }

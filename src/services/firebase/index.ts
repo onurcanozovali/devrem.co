@@ -27,7 +27,18 @@ export {
   fetchOlderDevreChatMessages,
   sendDevreChatMessage,
   subscribeToRecentDevreChatMessages,
+  createAudioMessageDraft,
+  createDevreChatMessageId,
+  createImageMessageDraft,
+  fetchRecentGroupImages,
 } from './chat';
+export type { DevreChatCursor } from './chat';
+export {
+  deleteChatMedia,
+  getChatMediaPath,
+  resolveChatMediaLocalUri,
+  uploadChatMedia,
+} from './chatMedia';
 export { deleteProfilePhoto, resolveProfilePhotoURL, uploadProfilePhoto } from './profilePhoto';
 export {
   deleteCurrentNotificationDevice,
