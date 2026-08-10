@@ -66,7 +66,7 @@ async function seedMessages(): Promise<number> {
         : `Geliştirme mesajı ${index + 1}`,
       createdAt: timestamp,
       clientCreatedAt: timestamp,
-      schemaVersion: 2,
+        schemaVersion: 3,
       developmentSeed: true,
     });
   }

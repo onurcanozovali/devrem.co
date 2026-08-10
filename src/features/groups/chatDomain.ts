@@ -1,8 +1,9 @@
 export const DEVRE_CHAT_MESSAGE_MAX_LENGTH = 1500;
 export const DEVRE_CHAT_AUDIO_MAX_DURATION_MS = 3 * 60 * 1000;
+export const DEVRE_CHAT_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
 
 export type DevreChatMessageStatus = 'pending' | 'sent' | 'failed';
-export type DevreChatMessageType = 'text' | 'image' | 'audio';
+export type DevreChatMessageType = 'text' | 'image' | 'audio' | 'document';
 
 interface DevreChatMessageBase {
   id: string;
@@ -11,13 +12,30 @@ interface DevreChatMessageBase {
   clientCreatedAt: Date;
   status: DevreChatMessageStatus;
   localMediaUri?: string;
+  deletedForEveryone: boolean;
+  deletedAt: Date | null;
+  deletedBy: string | null;
 }
 
 export type DevreChatMessage = DevreChatMessageBase & (
   | { type: 'text'; text: string }
   | { type: 'image'; caption: string; mediaPath: string; width: number; height: number }
   | { type: 'audio'; mediaPath: string; durationMillis: number }
+  | { type: 'document'; mediaPath: string; fileName: string; mimeType: string; sizeBytes: number; extension: DevreChatDocumentExtension }
 );
+
+export const devreChatDocumentExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'] as const;
+export type DevreChatDocumentExtension = typeof devreChatDocumentExtensions[number];
+
+export const devreChatDocumentMimeTypes: Record<DevreChatDocumentExtension, string> = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
 
 export function normalizeDevreChatText(value: string): string {
   return value.trim();

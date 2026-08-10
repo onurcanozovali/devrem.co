@@ -26,6 +26,14 @@ const chatAudioMetadata = {
   contentType: 'audio/mp4',
   customMetadata: { kind: 'audio', messageId: 'message-2', senderUid: 'user-1' },
 };
+const chatDocumentPath = `devreGroups/${groupId}/media/message-3/document`;
+const chatDocumentMetadata = {
+  contentType: 'application/pdf',
+  customMetadata: {
+    extension: 'pdf', fileName: 'Sevk_Belgesi.pdf', kind: 'document',
+    messageId: 'message-3', senderUid: 'user-1',
+  },
+};
 let environment: RulesTestEnvironment;
 
 before(async () => {
@@ -137,5 +145,24 @@ test('only active members may upload and read bounded chat audio', async () => {
   await assertFails(uploadBytes(ref(environment.authenticatedContext('user-1').storage(), chatAudioPath), new Uint8Array([1]), {
     ...chatAudioMetadata,
     customMetadata: { ...chatAudioMetadata.customMetadata, messageId: 'wrong-id' },
+  }));
+});
+
+test('documents are private, bounded, and restricted to approved MIME-extension pairs', async () => {
+  const owner = environment.authenticatedContext('user-1').storage();
+  const document = ref(owner, chatDocumentPath);
+  await assertSucceeds(uploadBytes(document, new Uint8Array([1, 2, 3]), chatDocumentMetadata));
+  await assertSucceeds(getBytes(ref(environment.authenticatedContext('user-2').storage(), chatDocumentPath)));
+  await assertFails(getBytes(ref(environment.authenticatedContext('user-3').storage(), chatDocumentPath)));
+  await assertFails(uploadBytes(document, new Uint8Array([1]), {
+    ...chatDocumentMetadata,
+    contentType: 'application/octet-stream',
+  }));
+  await assertFails(uploadBytes(document, new Uint8Array([1]), {
+    ...chatDocumentMetadata,
+    customMetadata: { ...chatDocumentMetadata.customMetadata, extension: 'exe' },
+  }));
+  await assertFails(uploadBytes(ref(owner, `devreGroups/${groupId}/media/message-3/archive.zip`), new Uint8Array([1]), {
+    contentType: 'application/zip',
   }));
 });

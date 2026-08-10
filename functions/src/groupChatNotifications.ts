@@ -163,7 +163,7 @@ export async function processGroupChatMessage(input: {
   }
   const expectedMediaPath = message.type === 'text'
     ? null
-    : `devreGroups/${groupId}/media/${messageId}/${message.type === 'image' ? 'image.jpg' : 'audio.m4a'}`;
+    : `devreGroups/${groupId}/media/${messageId}/${message.type === 'image' ? 'image.jpg' : message.type === 'audio' ? 'audio.m4a' : 'document'}`;
   if (message.mediaPath !== expectedMediaPath) {
     logger.warn('Group message with an invalid media path ignored.', { groupId, messageId });
     return;

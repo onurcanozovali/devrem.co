@@ -30,9 +30,16 @@ export {
   createAudioMessageDraft,
   createDevreChatMessageId,
   createImageMessageDraft,
+  createDocumentMessageDraft,
+  deleteGroupMessageForEveryone,
+  fetchHiddenGroupMessageIds,
   fetchRecentGroupImages,
+  fetchRecentGroupDocuments,
+  hideGroupMessageForUser,
+  markDevreGroupRead,
+  subscribeToGroupReadCursors,
 } from './chat';
-export type { DevreChatCursor } from './chat';
+export type { DevreChatCursor, DevreGroupReadCursor } from './chat';
 export {
   deleteChatMedia,
   getChatMediaPath,

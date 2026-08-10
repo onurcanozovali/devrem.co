@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { EmptyState } from '@/components/common/EmptyState';
@@ -15,11 +15,20 @@ import { militaryTypeLabels, monthLabels } from '@/features/profile/profileOptio
 import { acknowledgeDevreGroup } from '@/services/firebase';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useCurrentDevreGroup } from './useCurrentDevreGroup';
+import { consumeGroupChatReturnSuppression } from './groupChatNavigation';
 
 export function GroupScreen() {
   const { colors, spacing } = useTheme();
   const { error, profile, result, retry, session, setResult } = useCurrentDevreGroup();
   const [acknowledgementError, setAcknowledgementError] = useState<string | null>(null);
+  const [automaticOpening, setAutomaticOpening] = useState(false);
+  useFocusEffect(useCallback(() => {
+    if (result?.status !== 'ready' || !result.acknowledged) return undefined;
+    if (consumeGroupChatReturnSuppression()) { setAutomaticOpening(false); return undefined; }
+    setAutomaticOpening(true);
+    const timeout = setTimeout(() => router.push({ pathname: '/group-chat/[groupId]', params: { groupId: result.group.groupId, source: 'groupTab' } }), 0);
+    return () => clearTimeout(timeout);
+  }, [result]));
 
   if (!profile?.militaryUnit) {
     return <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}><EmptyState title="Devre grubun henüz oluşmadı" description="Birlik bilgin tamamlandığında grubun otomatik olarak hazırlanacak." /></ScreenContainer>;
@@ -33,8 +42,11 @@ export function GroupScreen() {
   if (result.status === 'pending') {
     return <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}><EmptyState title="Devre grubun hazırlanıyor" description="Profilin işlendiğinde grubun otomatik olarak burada görünecek." actionLabel="Tekrar kontrol et" onAction={retry} /></ScreenContainer>;
   }
+  if (result.acknowledged && automaticOpening) {
+    return <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}><LoadingState label="Sohbet açılıyor…" /></ScreenContainer>;
+  }
   const { group } = result;
-  const openChat = () => router.push({ pathname: '/group-chat/[groupId]', params: { groupId: group.groupId } });
+  const openChat = () => router.push({ pathname: '/group-chat/[groupId]', params: { groupId: group.groupId, source: 'groupTab' } });
   const acknowledge = async () => {
     if (!session) return;
     setAcknowledgementError(null);

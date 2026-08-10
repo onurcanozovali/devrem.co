@@ -28,6 +28,9 @@ function message(
     createdAt: new Date(seconds * 1000),
     clientCreatedAt: new Date(seconds * 1000),
     status,
+    deletedForEveryone: false,
+    deletedAt: null,
+    deletedBy: null,
   };
 }
 
@@ -67,6 +70,7 @@ test('chat merge preserves a local media URI while realtime confirms the same me
     id: 'image', senderUid: 'sender', type: 'image', caption: '', mediaPath: 'remote.jpg',
     width: 800, height: 600, localMediaUri: 'file:///preview.jpg', createdAt: null,
     clientCreatedAt: new Date(1000), status: 'pending',
+    deletedForEveryone: false, deletedAt: null, deletedBy: null,
   };
   const confirmed: DevreChatMessage = { ...optimistic, localMediaUri: undefined, createdAt: new Date(2000), status: 'sent' };
   assert.equal(mergeDevreChatMessages([optimistic], [confirmed])[0]?.localMediaUri, 'file:///preview.jpg');

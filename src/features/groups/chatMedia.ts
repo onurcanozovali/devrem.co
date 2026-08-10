@@ -17,17 +17,6 @@ function parseImageResult(result: ImagePicker.ImagePickerResult): SelectedChatIm
   return { height: asset.height, uri: asset.uri, width: asset.width };
 }
 
-export async function takeChatPhoto(): Promise<SelectedChatImage | null> {
-  const permission = await ImagePicker.requestCameraPermissionsAsync();
-  if (!permission.granted) throw new Error('camera-permission-denied');
-  return parseImageResult(await ImagePicker.launchCameraAsync({
-    allowsEditing: false,
-    cameraType: ImagePicker.CameraType.back,
-    mediaTypes: ['images'],
-    quality: 1,
-  }));
-}
-
 export async function selectChatPhoto(): Promise<SelectedChatImage | null> {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) throw new Error('library-permission-denied');

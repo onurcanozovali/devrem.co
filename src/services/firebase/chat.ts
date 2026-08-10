@@ -2,27 +2,36 @@ import {
   Timestamp,
   collection,
   doc,
+  documentId,
   getDocs,
   getFirestore,
   limit,
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   startAfter,
+  updateDoc,
   where,
   type QueryDocumentSnapshot,
   type QuerySnapshot,
 } from '@react-native-firebase/firestore';
 
-import { normalizeDevreChatText, type DevreChatMessage } from '../../features/groups/chatDomain';
+import {
+  devreChatDocumentExtensions,
+  normalizeDevreChatText,
+  type DevreChatDocumentExtension,
+  type DevreChatMessage,
+} from '../../features/groups/chatDomain';
 import { getFirebaseApp } from './app';
 import { getChatMediaPath } from './chatMedia';
 
 const PAGE_SIZE = 40;
 export type DevreChatCursor = QueryDocumentSnapshot;
 export interface DevreChatPage { messages: DevreChatMessage[]; cursor: DevreChatCursor | null; hasMore: boolean }
+export interface DevreGroupReadCursor { uid: string; lastReadMessageId: string; lastReadMessageCreatedAt: Date; lastReadAt: Date }
 
 function messagesCollection(groupId: string) {
   return collection(getFirestore(getFirebaseApp()), 'devreGroups', groupId, 'messages');
@@ -37,6 +46,9 @@ function parseMessage(snapshot: QueryDocumentSnapshot): DevreChatMessage | null 
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : null,
     clientCreatedAt: data.clientCreatedAt.toDate(),
     status: snapshot.metadata.hasPendingWrites ? 'pending' as const : 'sent' as const,
+    deletedForEveryone: data.deletedForEveryone === true,
+    deletedAt: data.deletedAt instanceof Timestamp ? data.deletedAt.toDate() : null,
+    deletedBy: typeof data.deletedBy === 'string' ? data.deletedBy : null,
   };
   const type = data.type ?? 'text';
   if (type === 'text' && typeof data.text === 'string') return { ...base, type, text: data.text };
@@ -47,6 +59,14 @@ function parseMessage(snapshot: QueryDocumentSnapshot): DevreChatMessage | null 
   if (type === 'audio' && typeof data.mediaPath === 'string' && typeof data.durationMillis === 'number') {
     return { ...base, type, mediaPath: data.mediaPath, durationMillis: data.durationMillis };
   }
+  if (
+    type === 'document' && typeof data.mediaPath === 'string' && typeof data.fileName === 'string'
+    && typeof data.mimeType === 'string' && typeof data.sizeBytes === 'number'
+    && devreChatDocumentExtensions.includes(data.extension as DevreChatDocumentExtension)
+  ) return {
+    ...base, type, mediaPath: data.mediaPath, fileName: data.fileName, mimeType: data.mimeType,
+    sizeBytes: data.sizeBytes, extension: data.extension as DevreChatDocumentExtension,
+  };
   return null;
 }
 
@@ -63,7 +83,10 @@ export function createDevreChatMessageId(groupId: string): string {
 }
 
 function draftBase(id: string, senderUid: string) {
-  return { id, senderUid, createdAt: null, clientCreatedAt: new Date(), status: 'pending' as const };
+  return {
+    id, senderUid, createdAt: null, clientCreatedAt: new Date(), status: 'pending' as const,
+    deletedForEveryone: false, deletedAt: null, deletedBy: null,
+  };
 }
 
 export function createDevreChatMessageDraft(groupId: string, senderUid: string, text: string): DevreChatMessage {
@@ -89,15 +112,30 @@ export function createAudioMessageDraft(input: {
   };
 }
 
+export function createDocumentMessageDraft(input: {
+  extension: DevreChatDocumentExtension; fileName: string; groupId: string; localMediaUri: string;
+  messageId: string; mimeType: string; senderUid: string; sizeBytes: number;
+}): DevreChatMessage {
+  return {
+    ...draftBase(input.messageId, input.senderUid), type: 'document', extension: input.extension,
+    fileName: input.fileName, mediaPath: getChatMediaPath(input.groupId, input.messageId, 'document'),
+    localMediaUri: input.localMediaUri, mimeType: input.mimeType, sizeBytes: input.sizeBytes,
+  };
+}
+
 export async function sendDevreChatMessage(groupId: string, message: DevreChatMessage): Promise<void> {
   const common = {
     id: message.id, senderUid: message.senderUid, type: message.type,
-    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.fromDate(message.clientCreatedAt), schemaVersion: 2,
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.fromDate(message.clientCreatedAt), schemaVersion: 3,
   };
   const data = message.type === 'text' ? { ...common, text: message.text }
     : message.type === 'image' ? {
       ...common, mediaPath: message.mediaPath, caption: message.caption, width: message.width, height: message.height,
-    } : { ...common, mediaPath: message.mediaPath, durationMillis: message.durationMillis };
+    } : message.type === 'audio' ? { ...common, mediaPath: message.mediaPath, durationMillis: message.durationMillis }
+      : {
+        ...common, mediaPath: message.mediaPath, fileName: message.fileName, mimeType: message.mimeType,
+        sizeBytes: message.sizeBytes, extension: message.extension,
+      };
   await setDoc(doc(messagesCollection(groupId), message.id), data);
 }
 
@@ -111,5 +149,74 @@ export async function fetchOlderDevreChatMessages(groupId: string, cursor: Devre
 
 export async function fetchRecentGroupImages(groupId: string, count = 24): Promise<DevreChatMessage[]> {
   const snapshot = await getDocs(query(messagesCollection(groupId), where('type', '==', 'image'), orderBy('createdAt', 'desc'), limit(count)));
-  return parsePage(snapshot).messages.filter((message) => message.type === 'image');
+  return parsePage(snapshot).messages.filter((message) => message.type === 'image' && !message.deletedForEveryone);
+}
+
+export async function fetchRecentGroupDocuments(groupId: string, count = 4): Promise<DevreChatMessage[]> {
+  const snapshot = await getDocs(query(messagesCollection(groupId), where('type', '==', 'document'), orderBy('createdAt', 'desc'), limit(count)));
+  return parsePage(snapshot).messages.filter((message) => message.type === 'document' && !message.deletedForEveryone);
+}
+
+export async function hideGroupMessageForUser(uid: string, groupId: string, messageId: string): Promise<void> {
+  await setDoc(doc(getFirestore(getFirebaseApp()), 'users', uid, 'hiddenGroupMessages', groupId, 'messages', messageId), {
+    groupId, messageId, hiddenAt: serverTimestamp(),
+  });
+}
+
+export async function fetchHiddenGroupMessageIds(
+  uid: string,
+  groupId: string,
+  messageIds: readonly string[],
+): Promise<Set<string>> {
+  const result = new Set<string>();
+  const hidden = collection(getFirestore(getFirebaseApp()), 'users', uid, 'hiddenGroupMessages', groupId, 'messages');
+  for (let index = 0; index < messageIds.length; index += 30) {
+    const ids = messageIds.slice(index, index + 30);
+    if (!ids.length) continue;
+    const snapshot = await getDocs(query(hidden, where(documentId(), 'in', ids)));
+    snapshot.docs.forEach((item) => result.add(item.id));
+  }
+  return result;
+}
+
+export async function deleteGroupMessageForEveryone(groupId: string, messageId: string, uid: string): Promise<void> {
+  await updateDoc(doc(messagesCollection(groupId), messageId), {
+    deletedForEveryone: true,
+    deletedAt: serverTimestamp(),
+    deletedBy: uid,
+  });
+}
+
+export function subscribeToGroupReadCursors(
+  groupId: string,
+  onChange: (cursors: DevreGroupReadCursor[]) => void,
+): () => void {
+  return onSnapshot(collection(getFirestore(getFirebaseApp()), 'devreGroups', groupId, 'readCursors'), (snapshot) => {
+    onChange(snapshot.docs.flatMap((item) => {
+      const data = item.data();
+      return data.uid === item.id && typeof data.lastReadMessageId === 'string'
+        && data.lastReadMessageCreatedAt instanceof Timestamp && data.lastReadAt instanceof Timestamp
+        ? [{ uid: item.id, lastReadMessageId: data.lastReadMessageId, lastReadMessageCreatedAt: data.lastReadMessageCreatedAt.toDate(), lastReadAt: data.lastReadAt.toDate() }]
+        : [];
+    }));
+  });
+}
+
+export async function markDevreGroupRead(uid: string, groupId: string, message: DevreChatMessage): Promise<void> {
+  if (!message.createdAt || message.status !== 'sent') return;
+  const database = getFirestore(getFirebaseApp());
+  const reference = doc(database, 'devreGroups', groupId, 'readCursors', uid);
+  await runTransaction(database, async (transaction) => {
+    const current = await transaction.get(reference);
+    const currentTime = current.get('lastReadMessageCreatedAt');
+    if (currentTime instanceof Timestamp && currentTime.toMillis() >= message.createdAt!.getTime()) return;
+    transaction.set(reference, {
+      uid,
+      lastReadMessageId: message.id,
+      lastReadMessageCreatedAt: Timestamp.fromDate(message.createdAt!),
+      lastReadAt: serverTimestamp(),
+      createdAt: current.exists() && current.get('createdAt') instanceof Timestamp ? current.get('createdAt') : serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
 }

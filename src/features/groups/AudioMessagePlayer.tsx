@@ -36,7 +36,7 @@ export const AudioMessagePlayer = memo(function AudioMessagePlayer({
   }, [messageId, status.didJustFinish]);
   const total = status.duration || durationMillis / 1000;
   const progress = total > 0 ? Math.min(1, status.currentTime / total) : 0;
-  const color = own ? colors.textInverse : colors.primary;
+  const color = own ? colors.chatTextMine : colors.primary;
   const toggle = () => {
     if (!uri) return;
     if (status.playing) { player.pause(); clearChatAudio(messageId); }

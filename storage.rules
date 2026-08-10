@@ -44,6 +44,29 @@ service firebase.storage {
         && resource.metadata.senderUid == request.auth.uid;
     }
 
+    match /devreGroups/{groupId}/media/{messageId}/document {
+      allow read: if isDevreGroupMember(groupId);
+      allow create, update: if isDevreGroupMember(groupId)
+        && request.resource.size <= 20 * 1024 * 1024
+        && request.resource.metadata.kind == 'document'
+        && request.resource.metadata.messageId == messageId
+        && request.resource.metadata.senderUid == request.auth.uid
+        && request.resource.metadata.fileName.size() > 0
+        && request.resource.metadata.fileName.size() <= 120
+        && (
+          (request.resource.metadata.extension == 'pdf' && request.resource.contentType == 'application/pdf')
+          || (request.resource.metadata.extension == 'doc' && request.resource.contentType == 'application/msword')
+          || (request.resource.metadata.extension == 'docx' && request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+          || (request.resource.metadata.extension == 'xls' && request.resource.contentType == 'application/vnd.ms-excel')
+          || (request.resource.metadata.extension == 'xlsx' && request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+          || (request.resource.metadata.extension == 'ppt' && request.resource.contentType == 'application/vnd.ms-powerpoint')
+          || (request.resource.metadata.extension == 'pptx' && request.resource.contentType == 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
+        )
+        && (resource == null || resource.metadata.senderUid == request.auth.uid);
+      allow delete: if isDevreGroupMember(groupId)
+        && resource.metadata.senderUid == request.auth.uid;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
