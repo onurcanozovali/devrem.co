@@ -477,13 +477,24 @@ ve okundu göstergesi üye x mesaj write patlaması oluşturmadan türetilir. Ku
 silindiğinde eski cursor trusted membership senkronizasyonu tarafından kaldırılır.
 
 Kamera artık `expo-camera` `CameraView` ile Devrem'e ait photo-only arayüzdür. Belge seçimi `expo-document-picker`,
-güvenli cihaz açma/paylaşma yüzeyi `expo-sharing`, kopyalama `expo-clipboard` kullanır. Composer
-`react-native-keyboard-controller` içindeki chat scroll/sticky composer yapısıyla klavyeye bağlanır; composer'ın
-ölçülen yüksekliği inverted listeye ayrıldığı için input ve en yeni mesajlar klavyenin arkasında kalmaz. Mesajı
+güvenli cihaz açma/paylaşma yüzeyi `expo-sharing`, kopyalama `expo-clipboard` kullanır. Android sohbet penceresinin
+tek klavye otoritesi native `adjustResize` davranışıdır; composer listeyle aynı normal flex akışındadır. iOS yalnızca
+merkezi `react-native-keyboard-controller` avoiding view kullanır. Absolute/sticky composer, ölçülen composer
+yüksekliği animasyonu ve keyboard scroll offset'i kullanılmaz. Inverted ve bounded `FlatList`, görünür içeriği
+koruyarak eski sayfaları sona ekler; kullanıcı geçmişteyken yeni mesaj gelişinde konumu değiştirmez. Mesajı
 sağa kaydırma veya uzun basma yanıt akışını açar. Ses kaydı üründen çıkarılmış, `RECORD_AUDIO` manifest izni
 engellenmiştir; eski sesli mesajlar geriye uyumlu olarak
 oynatılabilir. Android prebuild manifestinde `CAMERA` ve `adjustResize` doğrulanmıştır. Bu native değişikliklerin
 tamamı yeni development build gerektirir; eski APK'ya JS update göndermek native izinleri değiştirmez.
+
+Mesaj satırları semantik eşitlik ve stabil kimlikle korunur; tekrarlanan realtime snapshot değişmemiş satırların
+React nesnesini değiştirmez. Composer taslağı ve ses oynatma ilerlemesi ilgili alt bileşende kalır. Böylece yazma,
+klavye görünürlüğü veya başka bir ses satırının ilerlemesi görünür mesajların tamamını yeniden render etmez. Eski
+sesli mesaj dosyaları satır mount edildiğinde topluca indirilmez; kullanıcı oynat düğmesine bastığında ilgili satır
+dosyayı çözüp player'a yükler ve aynı anda yalnızca bir ses aktif kalır.
+Fotoğraf alanı mesajdaki en/boy metadata'sıyla indirme öncesinde ayrılır. Tam ekran görüntüleyici
+`react-native-gesture-handler` ve Reanimated ile pinch-to-zoom, odak merkezli büyütme, zoom sırasında pan,
+çift dokunmayla 2x/sıfırlama ve Android hardware-back kapatma sağlar.
 
 Uygulama ikonu, adaptive icon ve native splash `assets/branding` altındadır. Splash, koyu Devrem yeşili üzerinde
 şeffaf logoyu gösterir ve kısa bir fade ile kapanır; GIF/MP4 native splash olarak kullanılmaz.

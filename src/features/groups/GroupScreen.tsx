@@ -25,8 +25,8 @@ export function GroupScreen() {
   useFocusEffect(useCallback(() => {
     if (result?.status !== 'ready' || !result.acknowledged || openingRef.current) return undefined;
     openingRef.current = true;
-    const timeout = setTimeout(() => router.replace({ pathname: '/group-chat/[groupId]', params: { groupId: result.group.groupId, returnTo: getGroupChatReturnPath(), source: 'groupTab' } }), 0);
-    return () => clearTimeout(timeout);
+    router.replace({ pathname: '/group-chat/[groupId]', params: { groupId: result.group.groupId, returnTo: getGroupChatReturnPath(), source: 'groupTab' } });
+    return () => { openingRef.current = false; };
   }, [result]));
 
   if (!profile?.militaryUnit) {

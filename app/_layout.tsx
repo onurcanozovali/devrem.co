@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { memo } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
@@ -117,11 +118,13 @@ const DataProviders = memo(function DataProviders() {
 
 export default function RootLayout() {
   return (
-    <KeyboardProvider preload>
-      <ThemeProvider>
-        <ThemedStatusBar />
-        <DataProviders />
-      </ThemeProvider>
-    </KeyboardProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider preload>
+        <ThemeProvider>
+          <ThemedStatusBar />
+          <DataProviders />
+        </ThemeProvider>
+      </KeyboardProvider>
+    </GestureHandlerRootView>
   );
 }

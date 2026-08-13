@@ -38,6 +38,24 @@ function message(
   };
 }
 
+function scaledMessage(index: number): DevreChatMessage {
+  const base = {
+    ...message(`message-${index}`, index * 75),
+    senderUid: `sender-${index % 7}`,
+  };
+  if (index % 4 === 1) return {
+    ...base, type: 'image', caption: `Fotoğraf ${index}`, mediaPath: `image-${index}.jpg`, width: 1200, height: 800,
+  };
+  if (index % 4 === 2) return {
+    ...base, type: 'document', extension: 'pdf', fileName: `belge-${index}.pdf`, mediaPath: `document-${index}`,
+    mimeType: 'application/pdf', sizeBytes: 1024 + index,
+  };
+  if (index % 4 === 3) return {
+    ...base, type: 'audio', durationMillis: 30_000 + index, mediaPath: `audio-${index}.m4a`,
+  };
+  return base;
+}
+
 test('chat text trims outer whitespace but preserves line breaks', () => {
     assert.equal(normalizeDevreChatText('  ilk satır\nikinci satır  '), 'ilk satır\nikinci satır');
   });
@@ -92,6 +110,19 @@ test('chat merge preserves a local media URI while realtime confirms the same me
   };
   const confirmed: DevreChatMessage = { ...optimistic, localMediaUri: undefined, createdAt: new Date(2000), status: 'sent' };
   assert.equal(mergeDevreChatMessages([optimistic], [confirmed])[0]?.localMediaUri, 'file:///preview.jpg');
+});
+
+test('unchanged realtime snapshots preserve message object identity for memoized rows', () => {
+  const current = Array.from({ length: 500 }, (_, index) => scaledMessage(index));
+  const repeatedSnapshot = current.slice(0, 40).map((item) => ({
+    ...item,
+    createdAt: item.createdAt ? new Date(item.createdAt) : null,
+    clientCreatedAt: new Date(item.clientCreatedAt),
+  }));
+  const merged = mergeDevreChatMessages(current, repeatedSnapshot);
+  const byId = new Map(merged.map((item) => [item.id, item]));
+  current.forEach((item) => assert.equal(byId.get(item.id), item));
+  assert.equal(merged.length, 500);
 });
 
 test('message clustering requires same sender and at most five minutes', () => {

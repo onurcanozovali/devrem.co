@@ -104,6 +104,35 @@ function messageTime(message: DevreChatMessage): number {
   return (message.createdAt ?? message.clientCreatedAt).getTime();
 }
 
+function sameDate(left: Date | null, right: Date | null): boolean {
+  return left === right || left?.getTime() === right?.getTime();
+}
+
+export function areDevreChatMessagesEqual(left: DevreChatMessage, right: DevreChatMessage): boolean {
+  if (
+    left.id !== right.id
+    || left.type !== right.type
+    || left.senderUid !== right.senderUid
+    || left.status !== right.status
+    || left.localMediaUri !== right.localMediaUri
+    || left.deletedForEveryone !== right.deletedForEveryone
+    || left.deletedBy !== right.deletedBy
+    || left.replyToMessageId !== right.replyToMessageId
+    || !sameDate(left.createdAt, right.createdAt)
+    || !sameDate(left.clientCreatedAt, right.clientCreatedAt)
+    || !sameDate(left.deletedAt, right.deletedAt)
+  ) return false;
+  if (left.type === 'text' && right.type === 'text') return left.text === right.text;
+  if (left.type === 'image' && right.type === 'image') return left.caption === right.caption
+    && left.mediaPath === right.mediaPath && left.width === right.width && left.height === right.height;
+  if (left.type === 'audio' && right.type === 'audio') return left.mediaPath === right.mediaPath
+    && left.durationMillis === right.durationMillis;
+  if (left.type === 'document' && right.type === 'document') return left.mediaPath === right.mediaPath
+    && left.fileName === right.fileName && left.mimeType === right.mimeType
+    && left.sizeBytes === right.sizeBytes && left.extension === right.extension;
+  return false;
+}
+
 export function mergeDevreChatMessages(
   current: readonly DevreChatMessage[],
   incoming: readonly DevreChatMessage[],
@@ -111,9 +140,10 @@ export function mergeDevreChatMessages(
   const byId = new Map(current.map((message) => [message.id, message]));
   for (const message of incoming) {
     const existing = byId.get(message.id);
-    byId.set(message.id, existing?.localMediaUri
+    const reconciled = existing?.localMediaUri
       ? { ...message, localMediaUri: existing.localMediaUri }
-      : message);
+      : message;
+    byId.set(message.id, existing && areDevreChatMessagesEqual(existing, reconciled) ? existing : reconciled);
   }
   return [...byId.values()].sort((left, right) => {
     const difference = messageTime(right) - messageTime(left);
