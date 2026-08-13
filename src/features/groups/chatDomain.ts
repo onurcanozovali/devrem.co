@@ -16,6 +16,15 @@ interface DevreChatMessageBase {
   deletedForEveryone: boolean;
   deletedAt: Date | null;
   deletedBy: string | null;
+  replyToMessageId: string | null;
+}
+
+export function getDevreChatMessagePreview(message: DevreChatMessage): string {
+  if (message.deletedForEveryone) return 'Bu mesaj silindi';
+  if (message.type === 'text') return collapseDevreChatText(message.text) ?? message.text;
+  if (message.type === 'image') return message.caption || 'Fotoğraf';
+  if (message.type === 'audio') return 'Sesli mesaj';
+  return message.fileName;
 }
 
 export type DevreChatMessage = DevreChatMessageBase & (
@@ -37,6 +46,40 @@ export const devreChatDocumentMimeTypes: Record<DevreChatDocumentExtension, stri
   ppt: 'application/vnd.ms-powerpoint',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 };
+
+export interface NormalizedChatDocument {
+  extension: DevreChatDocumentExtension;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uri: string;
+}
+
+export function normalizeSelectedChatDocument(asset: {
+  mimeType?: string | null;
+  name: string;
+  size: number;
+  uri: string;
+}): NormalizedChatDocument {
+  const extension = asset.name.split('.').at(-1)?.toLowerCase();
+  if (
+    !asset.uri
+    || !asset.name
+    || !extension
+    || !devreChatDocumentExtensions.includes(extension as DevreChatDocumentExtension)
+  ) throw new Error('unsupported-document');
+  const typedExtension = extension as DevreChatDocumentExtension;
+  const expectedMime = devreChatDocumentMimeTypes[typedExtension];
+  if (asset.mimeType !== expectedMime) throw new Error('unsupported-document');
+  if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > DEVRE_CHAT_DOCUMENT_MAX_BYTES) throw new Error('document-too-large');
+  return {
+    extension: typedExtension,
+    fileName: asset.name.replace(/[\\/\u0000-\u001f\u007f]/g, '_').trim().slice(0, 120),
+    mimeType: expectedMime,
+    sizeBytes: asset.size,
+    uri: asset.uri,
+  };
+}
 
 export function normalizeDevreChatText(value: string): string {
   return value.trim();

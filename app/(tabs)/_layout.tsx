@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { rememberGroupChatReturnTab } from '@/features/groups/groupChatNavigation';
 import { useTheme } from '@/theme/ThemeProvider';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -16,6 +18,8 @@ const tabIcons: Record<string, IconName> = {
 
 export default function TabLayout() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 8);
 
   return (
     <Tabs
@@ -27,8 +31,8 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.divider,
-          height: 64,
-          paddingBottom: 8,
+          height: 56 + bottomInset,
+          paddingBottom: bottomInset,
           paddingTop: 6,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
@@ -40,7 +44,16 @@ export default function TabLayout() {
       <Tabs.Screen name="index" options={{ title: 'Ana Sayfa' }} />
       <Tabs.Screen name="preparation" options={{ title: 'Hazırlık' }} />
       <Tabs.Screen name="matching" options={{ title: 'Devreni Bul' }} />
-      <Tabs.Screen name="chats" options={{ title: 'Devre Grubum' }} />
+      <Tabs.Screen
+        name="chats"
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            const state = navigation.getState();
+            rememberGroupChatReturnTab(state.routes[state.index]?.name);
+          },
+        })}
+        options={{ title: 'Devre Grubum' }}
+      />
       <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
     </Tabs>
   );

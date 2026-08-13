@@ -449,12 +449,15 @@ pnpm dlx eas-cli@latest build --profile development --platform ios
 ### Phase 4D production UX modeli
 
 `Devre Grubum` tanıtım onayı `acknowledgedGroupId` ile grup kimliğine bağlıdır. Kullanıcı ilk girişte tanıtımı
-görür; aynı gruba sonraki tab girişlerinde doğrudan tam ekran sohbete gider. Canonical Devre değişirse yeni grup
-ayrı bir ilk giriş olarak değerlendirilir. Sohbet kök Stack rotasıdır; geri dönüş mevcut navigation history'yi
-kullanır ve cold-start için güvenli grup bağlamına düşer.
+görür; aynı gruba sonraki tab girişlerinde doğrudan tam ekran sohbete gider ve tanıtım kartı tekrar gösterilmez.
+Canonical Devre değişirse yeni grup ayrı bir ilk giriş olarak değerlendirilir. Grup sonucu tab ve chat route'u
+arasında paylaşılan session cache ile yeniden kullanılır; böylece peş peşe loading ekranları oluşmaz. Sohbet kök
+Stack rotasıdır ve güvenli allow-list içindeki önceki sekmeye döner; cold-start için ana sekmeye düşer.
 
-Yeni mesajlar `schemaVersion: 3` kullanır. Eski v2 text/image/audio mesajları okunmaya devam eder; migration veya
-backfill gerekmez. Yeni `document` tipi yalnızca PDF, DOC, DOCX, XLS, XLSX, PPT ve PPTX kabul eder; istemci ve
+Yeni mesajlar `schemaVersion: 4` kullanır ve nullable `replyToMessageId` ile aynı gruptaki mevcut bir mesaja
+güvenli yanıt verebilir. Firestore Rules olmayan bir mesaja veya mesajın kendisine yanıtı reddeder. Eski v2/v3
+mesajlar okunmaya, v3 istemciler yanıtsız mesaj göndermeye devam eder; migration veya backfill gerekmez. Yeni
+`document` tipi yalnızca PDF, DOC, DOCX, XLS, XLSX, PPT ve PPTX kabul eder; istemci ve
 Firestore/Storage Rules uzantı-MIME eşleşmesini doğrular ve boyutu 20 MB ile sınırlar.
 
 `Benden Sil`, `users/{uid}/hiddenGroupMessages/{groupId}/messages/{messageId}` altında owner-private bir işaret
@@ -474,11 +477,56 @@ ve okundu göstergesi üye x mesaj write patlaması oluşturmadan türetilir. Ku
 silindiğinde eski cursor trusted membership senkronizasyonu tarafından kaldırılır.
 
 Kamera artık `expo-camera` `CameraView` ile Devrem'e ait photo-only arayüzdür. Belge seçimi `expo-document-picker`,
-güvenli cihaz açma/paylaşma yüzeyi `expo-sharing`, kopyalama `expo-clipboard` kullanır. Composer gerçek layout
-akışında tutulur; Android `adjustResize`, iOS `KeyboardAvoidingView` ile mesaj listesinin üstüne binmeden klavyeye
-uyum sağlar. Ses kaydı üründen çıkarılmış, mikrofon izni kaldırılmıştır; eski sesli mesajlar geriye uyumlu olarak
+güvenli cihaz açma/paylaşma yüzeyi `expo-sharing`, kopyalama `expo-clipboard` kullanır. Composer
+`react-native-keyboard-controller` içindeki chat scroll/sticky composer yapısıyla klavyeye bağlanır; composer'ın
+ölçülen yüksekliği inverted listeye ayrıldığı için input ve en yeni mesajlar klavyenin arkasında kalmaz. Mesajı
+sağa kaydırma veya uzun basma yanıt akışını açar. Ses kaydı üründen çıkarılmış, `RECORD_AUDIO` manifest izni
+engellenmiştir; eski sesli mesajlar geriye uyumlu olarak
 oynatılabilir. Android prebuild manifestinde `CAMERA` ve `adjustResize` doğrulanmıştır. Bu native değişikliklerin
 tamamı yeni development build gerektirir; eski APK'ya JS update göndermek native izinleri değiştirmez.
+
+Uygulama ikonu, adaptive icon ve native splash `assets/branding` altındadır. Splash, koyu Devrem yeşili üzerinde
+şeffaf logoyu gösterir ve kısa bir fade ile kapanır; GIF/MP4 native splash olarak kullanılmaz.
+
+### Android uygulamalarından Devrem'e paylaşım
+
+Android Sharesheet, Expo SDK 57 `expo-sharing` yapılandırmasıyla yalnızca Devrem sohbetinin gerçekten kabul ettiği
+tekli dosya MIME türleri için açılır: JPEG, PNG, WEBP, PDF, DOC/DOCX, XLS/XLSX ve PPT/PPTX. Çoklu paylaşım,
+video, APK, arşiv ve genel `*/*` filtresi kaydedilmez. Expo eklentisinin oluşturduğu boş `ACTION_SEND_MULTIPLE`
+filtresi `plugins/withDevremAndroidShareTarget.js` tarafından prebuild sırasında kaldırılır; üretilen `android/`
+dosyalarında elle değişiklik yapılmaz.
+
+Sistem paylaşımı `app/+native-intent.ts` üzerinden `/share-confirmation` rotasına gider. Native resolver Android
+`content://` girdisini uygulamanın özel cache alanına kopyalar; uygulama yalnızca bu cache içindeki gerçek dosyayı
+okur. Dosya adı, bildirilen MIME ve boyut tek başına güvenilir kabul edilmez. Gerçek boyut, uzantı/MIME eşleşmesi,
+görüntü başlığı ve boyutları, PDF/Office imzası ve OOXML içeriği doğrulanır. Belgeler mevcut 20 MB sohbet sınırını,
+görüntüler mevcut sıkıştırma/yükleme hattını kullanır. Kullanıcı önizlemede açıkça
+`Devre Grubuna Gönder` demeden Storage veya Firestore yazımı yapılmaz.
+
+Oturum açılmamışsa dosya native cache'te tutulur; paylaşım ilk doğrulanan kullanıcı kimliğine bağlanır ve hesap
+değişirse silinir. Aktif canonical Devre grubu yoksa yükleme yapılmaz. Başarılı gönderim mevcut Phase 4D Storage ve
+mesaj oluşturma servislerini kullanır ve grup sohbetini açar. Vazgeçme/geri, geçici dosyayı ve paylaşım durumunu
+temizler. Aynı intent'in işlem içindeki tekrar teslimi ikinci bir gönderim oluşturmaz.
+
+Yerel doğrulama:
+
+```powershell
+pnpm test:attachments
+pnpm typecheck
+pnpm lint
+pnpm exec expo prebuild --platform android --no-install --clean
+```
+
+Son komut yalnızca manifest incelemesi içindir; managed workflow'da üretilen `android/` klasörü commit edilmez.
+Gerçek cihazda PDF, DOCX, JPEG ve PNG için cold/warm/background paylaşım, iptal, başarılı gönderim, duplicate intent,
+oturumsuz kullanıcı, grup bulunmaması ve büyük belge reddi manuel test edilmelidir. Video paylaşımında Devrem hedef
+olarak görünmemelidir. Native intent filtreleri değiştiğinden yeni Android development build zorunludur:
+
+```powershell
+pnpm dlx eas-cli@latest build --profile development --platform android
+```
+
+Bu özellik Firebase Rules veya Functions değiştirmez; inbound paylaşım için Firebase deploy gerekmez.
 
 ## Tema ve UI kuralları
 

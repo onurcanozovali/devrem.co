@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { memo, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   FlatList, Keyboard, Pressable, TextInput, useWindowDimensions, View,
-  type NativeSyntheticEvent, type TextInputSelectionChangeEventData,
+  type LayoutChangeEvent, type NativeSyntheticEvent, type TextInputSelectionChangeEventData,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -51,10 +51,15 @@ const EmojiPanel = memo(function EmojiPanel({ onSelect, recent }: { onSelect: (e
   </View>;
 });
 
-export const ChatComposer = memo(function ChatComposer({ disabled, onAttachment, onSend }: {
+export const ChatComposer = memo(function ChatComposer({ disabled, nativeID, onAttachment, onInputLayout, onSend, onStopReply, replyPreview, replySender }: {
   disabled: boolean;
+  nativeID?: string;
   onAttachment: () => void;
+  onInputLayout?: (event: LayoutChangeEvent) => void;
   onSend: (text: string) => void;
+  onStopReply: () => void;
+  replyPreview: string | null;
+  replySender: string | null;
 }) {
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
@@ -64,6 +69,12 @@ export const ChatComposer = memo(function ChatComposer({ disabled, onAttachment,
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [recentEmojis, setRecentEmojis] = useState<string[]>(['😀', '😂', '❤️', '👍', '🙏', '🎉', '🔥', '🫡']);
   const hasText = text.trim().length > 0;
+  useEffect(() => {
+    if (!replyPreview) return;
+    setEmojiOpen(false);
+    const timeout = setTimeout(() => inputRef.current?.focus(), 80);
+    return () => clearTimeout(timeout);
+  }, [replyPreview]);
   const insertEmoji = (emoji: string) => {
     setText((current) => `${current.slice(0, selection.start)}${emoji}${current.slice(selection.end)}`);
     const next = selection.start + emoji.length;
@@ -76,11 +87,16 @@ export const ChatComposer = memo(function ChatComposer({ disabled, onAttachment,
     setText('');
     setSelection({ start: 0, end: 0 });
   };
-  return <View>
+  return <View onLayout={onInputLayout}>
+    {replyPreview ? <View style={{ alignItems: 'center', backgroundColor: colors.surface, borderTopColor: colors.divider, borderTopWidth: 1, flexDirection: 'row', paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
+      <View style={{ backgroundColor: colors.primary, borderRadius: 2, height: 42, marginRight: spacing.sm, width: 4 }} />
+      <View style={{ flex: 1 }}><AppText style={{ color: colors.primary }} variant="caption" weight="900">{replySender ?? 'Devre'}</AppText><AppText color="muted" numberOfLines={1} variant="caption">{replyPreview}</AppText></View>
+      <Pressable accessibilityLabel="Yanıtı iptal et" onPress={onStopReply} style={{ alignItems: 'center', height: 42, justifyContent: 'center', width: 42 }}><Ionicons color={colors.textMuted} name="close" size={22} /></Pressable>
+    </View> : null}
     <View style={{ alignItems: 'flex-end', backgroundColor: colors.surface, borderTopColor: colors.divider, borderTopWidth: 1, flexDirection: 'row', gap: spacing.xs, paddingBottom: emojiOpen ? spacing.sm : Math.max(spacing.sm, insets.bottom), paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>
       <Pressable accessibilityLabel={emojiOpen ? 'Klavyeyi aç' : 'Emoji panelini aç'} onPress={() => { if (emojiOpen) { setEmojiOpen(false); setTimeout(() => inputRef.current?.focus(), 50); } else { Keyboard.dismiss(); setEmojiOpen(true); } }} style={{ alignItems: 'center', height: 46, justifyContent: 'center', width: 42 }}><Ionicons color={colors.textMuted} name={emojiOpen ? 'keypad-outline' : 'happy-outline'} size={27} /></Pressable>
       <View style={{ alignItems: 'flex-end', backgroundColor: colors.inputBackground, borderColor: colors.border, borderRadius: 23, borderWidth: 1, flex: 1, flexDirection: 'row', minHeight: 46 }}>
-        <TextInput ref={inputRef} accessibilityLabel="Mesaj" editable={!disabled} maxLength={DEVRE_CHAT_MESSAGE_MAX_LENGTH} multiline onChangeText={setText} onFocus={() => setEmojiOpen(false)} onSelectionChange={(event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => setSelection(event.nativeEvent.selection)} placeholder="Mesaj yaz…" placeholderTextColor={colors.placeholder} selection={selection} style={{ color: colors.textPrimary, flex: 1, fontSize: 16, maxHeight: 112, minHeight: 44, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }} value={text} />
+        <TextInput ref={inputRef} nativeID={nativeID} accessibilityLabel="Mesaj" editable={!disabled} maxLength={DEVRE_CHAT_MESSAGE_MAX_LENGTH} multiline onChangeText={setText} onFocus={() => setEmojiOpen(false)} onSelectionChange={(event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => setSelection(event.nativeEvent.selection)} placeholder="Mesaj yaz…" placeholderTextColor={colors.placeholder} selection={selection} style={{ color: colors.textPrimary, flex: 1, fontSize: 16, maxHeight: 112, minHeight: 44, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }} value={text} />
         <Pressable accessibilityLabel="Dosya ekle" disabled={disabled} onPress={onAttachment} style={{ alignItems: 'center', height: 46, justifyContent: 'center', opacity: disabled ? 0.45 : 1, width: 44 }}><Ionicons color={colors.textMuted} name="attach" size={26} /></Pressable>
       </View>
       <Pressable accessibilityLabel="Mesajı gönder" disabled={disabled || !hasText} onPress={submit} style={{ alignItems: 'center', backgroundColor: colors.primary, borderRadius: 23, height: 46, justifyContent: 'center', opacity: disabled || !hasText ? 0.42 : 1, width: 46 }}><Ionicons color={colors.textInverse} name="send" size={22} /></Pressable>

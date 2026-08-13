@@ -363,6 +363,22 @@ test('group messages are member-only, immutable, bounded, and sender-authenticat
     clientCreatedAt: Timestamp.now(),
     schemaVersion: 3,
   }));
+  await assertSucceeds(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'reply-1'), {
+    id: 'reply-1', senderUid: 'user-1', type: 'text', text: 'Yanıt',
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), replyToMessageId: 'message-1', schemaVersion: 4,
+  }));
+  await assertSucceeds(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'not-a-reply'), {
+    id: 'not-a-reply', senderUid: 'user-1', type: 'text', text: 'Yeni mesaj',
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), replyToMessageId: null, schemaVersion: 4,
+  }));
+  await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'missing-reply'), {
+    id: 'missing-reply', senderUid: 'user-1', type: 'text', text: 'Olmayan mesaja yanıt',
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), replyToMessageId: 'does-not-exist', schemaVersion: 4,
+  }));
+  await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'self-reply'), {
+    id: 'self-reply', senderUid: 'user-1', type: 'text', text: 'Kendine yanıt',
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), replyToMessageId: 'self-reply', schemaVersion: 4,
+  }));
   await assertSucceeds(getDocs(query(
     collection(memberDatabase, 'devreGroups', groupId, 'messages'),
     orderBy('createdAt', 'desc'),

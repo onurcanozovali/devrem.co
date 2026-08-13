@@ -8,6 +8,7 @@ import {
   DEVRE_CHAT_MESSAGE_PREVIEW_LENGTH,
   collapseDevreChatText,
   formatChatDate,
+  getDevreChatMessagePreview,
   isSameMessageCluster,
   mergeDevreChatMessages,
   normalizeDevreChatText,
@@ -33,6 +34,7 @@ function message(
     deletedForEveryone: false,
     deletedAt: null,
     deletedBy: null,
+    replyToMessageId: null,
   };
 }
 
@@ -50,6 +52,14 @@ test('long chat text has a bounded expandable preview without splitting emoji', 
   assert.equal(collapseDevreChatText('kısa mesaj'), null);
   const preview = collapseDevreChatText(`${'a'.repeat(DEVRE_CHAT_MESSAGE_PREVIEW_LENGTH - 1)}😀devam`);
   assert.equal(preview, `${'a'.repeat(DEVRE_CHAT_MESSAGE_PREVIEW_LENGTH - 1)}😀…`);
+});
+
+test('reply preview is safe for text, media, and deleted messages', () => {
+  assert.equal(getDevreChatMessagePreview(message('Selam devre', 1)), 'Selam devre');
+  assert.equal(getDevreChatMessagePreview({ ...message('deleted', 1), deletedForEveryone: true }), 'Bu mesaj silindi');
+  assert.equal(getDevreChatMessagePreview({
+    ...message('image', 1), type: 'image', caption: '', mediaPath: 'image.jpg', width: 800, height: 600,
+  }), 'Fotoğraf');
 });
 
 test('chat merge reconciles realtime and optimistic messages without duplicates', () => {
@@ -78,7 +88,7 @@ test('chat merge preserves a local media URI while realtime confirms the same me
     id: 'image', senderUid: 'sender', type: 'image', caption: '', mediaPath: 'remote.jpg',
     width: 800, height: 600, localMediaUri: 'file:///preview.jpg', createdAt: null,
     clientCreatedAt: new Date(1000), status: 'pending',
-    deletedForEveryone: false, deletedAt: null, deletedBy: null,
+    deletedForEveryone: false, deletedAt: null, deletedBy: null, replyToMessageId: null,
   };
   const confirmed: DevreChatMessage = { ...optimistic, localMediaUri: undefined, createdAt: new Date(2000), status: 'sent' };
   assert.equal(mergeDevreChatMessages([optimistic], [confirmed])[0]?.localMediaUri, 'file:///preview.jpg');

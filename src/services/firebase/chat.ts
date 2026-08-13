@@ -49,6 +49,7 @@ function parseMessage(snapshot: QueryDocumentSnapshot): DevreChatMessage | null 
     deletedForEveryone: data.deletedForEveryone === true,
     deletedAt: data.deletedAt instanceof Timestamp ? data.deletedAt.toDate() : null,
     deletedBy: typeof data.deletedBy === 'string' ? data.deletedBy : null,
+    replyToMessageId: typeof data.replyToMessageId === 'string' ? data.replyToMessageId : null,
   };
   const type = data.type ?? 'text';
   if (type === 'text' && typeof data.text === 'string') return { ...base, type, text: data.text };
@@ -82,22 +83,22 @@ export function createDevreChatMessageId(groupId: string): string {
   return doc(messagesCollection(groupId)).id;
 }
 
-function draftBase(id: string, senderUid: string) {
+function draftBase(id: string, senderUid: string, replyToMessageId: string | null = null) {
   return {
     id, senderUid, createdAt: null, clientCreatedAt: new Date(), status: 'pending' as const,
-    deletedForEveryone: false, deletedAt: null, deletedBy: null,
+    deletedForEveryone: false, deletedAt: null, deletedBy: null, replyToMessageId,
   };
 }
 
-export function createDevreChatMessageDraft(groupId: string, senderUid: string, text: string): DevreChatMessage {
-  return { ...draftBase(createDevreChatMessageId(groupId), senderUid), type: 'text', text: normalizeDevreChatText(text) };
+export function createDevreChatMessageDraft(groupId: string, senderUid: string, text: string, replyToMessageId: string | null = null): DevreChatMessage {
+  return { ...draftBase(createDevreChatMessageId(groupId), senderUid, replyToMessageId), type: 'text', text: normalizeDevreChatText(text) };
 }
 
 export function createImageMessageDraft(input: {
-  caption: string; groupId: string; height: number; localMediaUri: string; messageId: string; senderUid: string; width: number;
-}): DevreChatMessage {
+  caption: string; groupId: string; height: number; localMediaUri: string; messageId: string; replyToMessageId?: string | null; senderUid: string; width: number;
+}): Extract<DevreChatMessage, { type: 'image' }> {
   return {
-    ...draftBase(input.messageId, input.senderUid), type: 'image', caption: normalizeDevreChatText(input.caption),
+    ...draftBase(input.messageId, input.senderUid, input.replyToMessageId), type: 'image', caption: normalizeDevreChatText(input.caption),
     mediaPath: getChatMediaPath(input.groupId, input.messageId, 'image'), localMediaUri: input.localMediaUri,
     width: input.width, height: input.height,
   };
@@ -113,11 +114,11 @@ export function createAudioMessageDraft(input: {
 }
 
 export function createDocumentMessageDraft(input: {
-  extension: DevreChatDocumentExtension; fileName: string; groupId: string; localMediaUri: string;
+  extension: DevreChatDocumentExtension; fileName: string; groupId: string; localMediaUri: string; replyToMessageId?: string | null;
   messageId: string; mimeType: string; senderUid: string; sizeBytes: number;
-}): DevreChatMessage {
+}): Extract<DevreChatMessage, { type: 'document' }> {
   return {
-    ...draftBase(input.messageId, input.senderUid), type: 'document', extension: input.extension,
+    ...draftBase(input.messageId, input.senderUid, input.replyToMessageId), type: 'document', extension: input.extension,
     fileName: input.fileName, mediaPath: getChatMediaPath(input.groupId, input.messageId, 'document'),
     localMediaUri: input.localMediaUri, mimeType: input.mimeType, sizeBytes: input.sizeBytes,
   };
@@ -126,7 +127,8 @@ export function createDocumentMessageDraft(input: {
 export async function sendDevreChatMessage(groupId: string, message: DevreChatMessage): Promise<void> {
   const common = {
     id: message.id, senderUid: message.senderUid, type: message.type,
-    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.fromDate(message.clientCreatedAt), schemaVersion: 3,
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.fromDate(message.clientCreatedAt),
+    replyToMessageId: message.replyToMessageId, schemaVersion: 4,
   };
   const data = message.type === 'text' ? { ...common, text: message.text }
     : message.type === 'image' ? {
