@@ -17,6 +17,7 @@
     "seed:discovery": "pnpm run build && node lib/runDiscoverySeed.js seed",
     "seed:discovery:verify": "pnpm run build && node lib/runDiscoverySeed.js verify",
     "seed:chat": "pnpm run build && node lib/runGroupChatSeed.js seed",
+    "seed:chat:burst": "pnpm run build && node lib/runGroupChatSeed.js burst",
     "seed:chat:clear": "pnpm run build && node lib/runGroupChatSeed.js clear"
   },
   "dependencies": {

@@ -64,19 +64,16 @@ export const ChatComposer = memo(function ChatComposer({ disabled, nativeID, onA
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
-  const keyboardHeight = useKeyboardState((state) => state.height);
+  const { height: windowHeight } = useWindowDimensions();
   const inputRef = useRef<TextInput>(null);
-  const lastKeyboardHeightRef = useRef(260);
   const [text, setText] = useState('');
   const [selection, setSelection] = useState({ start: 0, end: 0 });
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [emojiHeight, setEmojiHeight] = useState(260);
   const [recentEmojis, setRecentEmojis] = useState<string[]>(['😀', '😂', '❤️', '👍', '🙏', '🎉', '🔥', '🫡']);
   const hasText = text.trim().length > 0;
   useEffect(() => {
-    if (keyboardHeight > 180) lastKeyboardHeightRef.current = keyboardHeight;
     if (keyboardVisible && emojiOpen) setEmojiOpen(false);
-  }, [emojiOpen, keyboardHeight, keyboardVisible]);
+  }, [emojiOpen, keyboardVisible]);
   useEffect(() => {
     if (!replyPreview) return;
     setEmojiOpen(false);
@@ -107,7 +104,6 @@ export const ChatComposer = memo(function ChatComposer({ disabled, nativeID, onA
       inputRef.current?.focus();
       return;
     }
-    setEmojiHeight(Math.max(240, lastKeyboardHeightRef.current));
     setEmojiOpen(true);
     Keyboard.dismiss();
   };
@@ -130,6 +126,6 @@ export const ChatComposer = memo(function ChatComposer({ disabled, nativeID, onA
       </View>
       <Pressable accessibilityLabel="Mesajı gönder" disabled={disabled || !hasText} onPress={submit} style={{ alignItems: 'center', backgroundColor: colors.primary, borderRadius: 23, height: 46, justifyContent: 'center', opacity: disabled || !hasText ? 0.42 : 1, width: 46 }}><Ionicons color={colors.textInverse} name="send" size={22} /></Pressable>
     </View>
-    {emojiOpen ? <EmojiPanel height={emojiHeight} onSelect={insertEmoji} recent={recentEmojis} /> : null}
+    {emojiOpen ? <EmojiPanel height={Math.min(300, Math.max(240, windowHeight * 0.36))} onSelect={insertEmoji} recent={recentEmojis} /> : null}
   </View>;
 });

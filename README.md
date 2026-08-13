@@ -379,19 +379,22 @@ kayıtlarını kullanır. Dedup anahtarı `groupId + messageId + recipientUid` o
 Bildirim deep link'i yalnızca doğrulanmış exact grup ID'siyle Devre Grubum sekmesine gider; kullanıcı artık o
 grubun üyesi değilse eski içerik gösterilmez. Aynı sohbet foreground'da açıksa banner bastırılır.
 
-Geliştirme projesinde mevcut bir gruba 10 veya 60 pagination mesajı eklemek için:
+Geliştirme projesinde mevcut bir gruba 10, 60 veya 200 pagination mesajı eklemek için:
 
 ```powershell
 $env:GCLOUD_PROJECT = 'devrem-d985b'
 pnpm seed:chat --group <devre-v1-group-id> --count 10
 pnpm seed:chat --group <devre-v1-group-id> --count 60
+pnpm seed:chat --group <devre-v1-group-id> --count 200
+pnpm seed:chat:burst --group <devre-v1-group-id>
 pnpm seed:chat:clear --group <devre-v1-group-id>
 ```
 
 Araç yalnızca `devrem-d985b` projesinde, açıkça verilen mevcut grubun gerçek üyelerini sender olarak kullanır.
 Fake üyelik/join event üretmez. Seed mesajları `developmentSeed: true` işaretlidir ve notification Function
 tarafından sessizce atlanır. Cleanup sadece deterministik `dev-chat-seed-*` ID'li ve bu işareti taşıyan belgeleri
-siler.
+siler. `seed:chat:burst`, 20 mesajı 100 ms aralıklarla yazarak bounded realtime listener ve liste ankrajını
+gerçek cihazda test eder; komut otomatik çalıştırılmaz.
 
 Hesap silme ortak grup mesajlarını silmez; gönderenin public profili kaldırıldığında UI adı `Devre` olarak
 gösterir. Owner-private profil, tercih, cihaz ve kullanıcıya bağlı notification delivery verileri silinir.
@@ -477,11 +480,14 @@ ve okundu göstergesi üye x mesaj write patlaması oluşturmadan türetilir. Ku
 silindiğinde eski cursor trusted membership senkronizasyonu tarafından kaldırılır.
 
 Kamera artık `expo-camera` `CameraView` ile Devrem'e ait photo-only arayüzdür. Belge seçimi `expo-document-picker`,
-güvenli cihaz açma/paylaşma yüzeyi `expo-sharing`, kopyalama `expo-clipboard` kullanır. Android sohbet penceresinin
+Android belge görüntüleme `expo-intent-launcher` üzerinden MIME-aware `ACTION_VIEW`, inbound paylaşım hedefi
+`expo-sharing`, kopyalama `expo-clipboard` kullanır. Normal belge dokunuşu paylaşım arayüzünü açmaz. Android sohbet penceresinin
 tek klavye otoritesi native `adjustResize` davranışıdır; composer listeyle aynı normal flex akışındadır. iOS yalnızca
 merkezi `react-native-keyboard-controller` avoiding view kullanır. Absolute/sticky composer, ölçülen composer
 yüksekliği animasyonu ve keyboard scroll offset'i kullanılmaz. Inverted ve bounded `FlatList`, görünür içeriği
-koruyarak eski sayfaları sona ekler; kullanıcı geçmişteyken yeni mesaj gelişinde konumu değiştirmez. Mesajı
+koruyarak eski sayfaları sona ekler; kullanıcı geçmişteyken yeni mesaj gelişinde konumu değiştirmez. Fabric
+`ReactClippingViewManager` kararlılığı için chat listesinde clipping ve `maintainVisibleContentPosition` kapalıdır;
+bounded pagination bellek sınırını korur. Mesajı
 sağa kaydırma veya uzun basma yanıt akışını açar. Ses kaydı üründen çıkarılmış, `RECORD_AUDIO` manifest izni
 engellenmiştir; eski sesli mesajlar geriye uyumlu olarak
 oynatılabilir. Android prebuild manifestinde `CAMERA` ve `adjustResize` doğrulanmıştır. Bu native değişikliklerin

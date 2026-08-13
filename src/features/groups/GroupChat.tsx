@@ -3,7 +3,7 @@ import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, FlatList, Image, Modal, PanResponder, Platform, Pressable, TextInput, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { KeyboardAvoidingView, useResizeMode } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
@@ -32,6 +32,7 @@ import {
   collapseDevreChatText, formatChatDate, getDevreChatMessagePreview, isSameMessageCluster, mergeDevreChatMessages, shouldShowDateSeparator,
   updateDevreChatMessageStatus, type DevreChatMessage,
 } from './chatDomain';
+import { countUnseenIncomingMessageIds, isNearLatestOffset } from './chatRuntime';
 import { prepareChatImage, selectChatPhoto, type SelectedChatImage } from './chatMedia';
 import type { DevreGroup } from './types/groups';
 import { uploadAndSendDevreChatMediaMessage } from './services/sendChatMedia';
@@ -140,6 +141,7 @@ function MessageInfoModal({ cursors, group, message, onClose }: {
 }
 
 export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack?: () => void; userId: string }) {
+  useResizeMode();
   const { colors, spacing } = useTheme();
   const listRef = useRef<FlatList<DevreChatMessage>>(null);
   const nearLatestRef = useRef(true);
@@ -147,6 +149,12 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
   const initializedRef = useRef(false);
   const loadedOlderRef = useRef(false);
   const [messages, setMessages] = useState<DevreChatMessage[]>([]);
+  const messagesRef = useRef<DevreChatMessage[]>([]);
+  const replaceMessages = useCallback((update: (current: DevreChatMessage[]) => DevreChatMessage[]) => {
+    const next = update(messagesRef.current);
+    messagesRef.current = next;
+    setMessages(next);
+  }, []);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [cursors, setCursors] = useState<DevreGroupReadCursor[]>([]);
   const [cursor, setCursor] = useState<DevreChatCursor | null>(null);
@@ -185,22 +193,17 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
   useEffect(() => subscribeToGroupReadCursors(group.groupId, setCursors), [group.groupId]);
   useEffect(() => subscribeToRecentDevreChatMessages(group.groupId, (page) => {
     loadHidden(page.messages);
-    setMessages((current) => {
-      const known = new Set(current.map((message) => message.id));
-      const unseen = page.messages.filter((message) => message.senderUid !== userId && !known.has(message.id)).length;
-      if (initializedRef.current && unseen && !nearLatestRef.current) {
-        setNearLatest(false);
-        setNewCount((count) => count + unseen);
-      }
-      return mergeDevreChatMessages(current, page.messages);
-    });
+    const known = new Set(messagesRef.current.map((message) => message.id));
+    const unseen = countUnseenIncomingMessageIds(known, page.messages, userId);
+    if (initializedRef.current && unseen && !nearLatestRef.current) setNewCount((count) => count + unseen);
+    replaceMessages((current) => mergeDevreChatMessages(current, page.messages));
     if (!loadedOlderRef.current) { setCursor(page.cursor); setHasMore(page.hasMore); }
     initializedRef.current = true; setInitialLoading(false); setError(null);
   }, (caughtError) => {
     setInitialLoading(false);
-    if (isPermissionDenied(caughtError)) { setMessages([]); setAccessLost(true); setError('Bu Devre grubuna erişimin sona erdi.'); }
+    if (isPermissionDenied(caughtError)) { replaceMessages(() => []); setAccessLost(true); setError('Bu Devre grubuna erişimin sona erdi.'); }
     else setError('Sohbet bağlantısı kesildi. İnternet bağlantını kontrol edip tekrar dene.');
-  }), [group.groupId, loadHidden, userId]);
+  }), [group.groupId, loadHidden, replaceMessages, userId]);
   useEffect(() => {
     const latest = visibleMessages[0];
     if (!latest || !nearLatest) return undefined;
@@ -212,7 +215,7 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
   }, [newCount]);
 
   const persist = useCallback(async (message: DevreChatMessage) => {
-    setMessages((current) => mergeDevreChatMessages(current, [message]));
+    replaceMessages((current) => mergeDevreChatMessages(current, [message]));
     try {
       if (message.type !== 'text') {
         await uploadAndSendDevreChatMediaMessage(group.groupId, message);
@@ -220,10 +223,10 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
         await sendDevreChatMessage(group.groupId, message);
       }
     } catch (caughtError: unknown) {
-      setMessages((current) => updateDevreChatMessageStatus(current, message.id, 'failed'));
-      if (isPermissionDenied(caughtError)) { setMessages([]); setAccessLost(true); setError('Bu Devre grubuna erişimin sona erdi.'); }
+      replaceMessages((current) => updateDevreChatMessageStatus(current, message.id, 'failed'));
+      if (isPermissionDenied(caughtError)) { replaceMessages(() => []); setAccessLost(true); setError('Bu Devre grubuna erişimin sona erdi.'); }
     }
-  }, [group.groupId]);
+  }, [group.groupId, replaceMessages]);
   const openImage = useCallback((image: ChatViewerImage) => setViewerImage(image), []);
   const selectMessage = useCallback((message: DevreChatMessage) => setSelectedMessage(message), []);
   const replyToMessage = useCallback((message: DevreChatMessage) => setReplyingTo(message), []);
@@ -241,7 +244,7 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
     setNewCount(0);
   }, []);
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nextNearLatest = event.nativeEvent.contentOffset.y < 96;
+    const nextNearLatest = isNearLatestOffset(event.nativeEvent.contentOffset.y);
     if (nearLatestRef.current === nextNearLatest) return;
     nearLatestRef.current = nextNearLatest;
     setNearLatest(nextNearLatest);
@@ -257,7 +260,7 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
   };
   const pickGallery = () => void selectChatPhoto().then((image) => { if (image) setPreview(image); }).catch(() => setError('Galeri açılamadı. Fotoğraf iznini kontrol et.'));
   const pickDocument = () => void selectChatDocument().then((document) => { if (document) sendDocument(document); }).catch((caught: unknown) => setError(caught instanceof Error && caught.message === 'document-too-large' ? 'Belge en fazla 20 MB olabilir.' : 'Yalnızca PDF, Word, Excel ve PowerPoint belgeleri desteklenir.'));
-  const loadOlder = useCallback(async () => { if (!cursor || !hasMore || loadingOlder) return; setLoadingOlder(true); try { const page = await fetchOlderDevreChatMessages(group.groupId, cursor); loadHidden(page.messages); loadedOlderRef.current = true; setMessages((current) => mergeDevreChatMessages(current, page.messages)); setCursor(page.cursor); setHasMore(page.hasMore); } catch { setError('Eski mesajlar yüklenemedi.'); } finally { setLoadingOlder(false); } }, [cursor, group.groupId, hasMore, loadHidden, loadingOlder]);
+  const loadOlder = useCallback(async () => { if (!cursor || !hasMore || loadingOlder) return; setLoadingOlder(true); try { const page = await fetchOlderDevreChatMessages(group.groupId, cursor); loadHidden(page.messages); loadedOlderRef.current = true; replaceMessages((current) => mergeDevreChatMessages(current, page.messages)); setCursor(page.cursor); setHasMore(page.hasMore); } catch { setError('Eski mesajlar yüklenemedi.'); } finally { setLoadingOlder(false); } }, [cursor, group.groupId, hasMore, loadHidden, loadingOlder, replaceMessages]);
   const hideSelected = (message: DevreChatMessage) => void hideGroupMessageForUser(userId, group.groupId, message.id).then(() => setHiddenIds((current) => new Set([...current, message.id]))).catch(() => setError('Mesaj gizlenemedi.'));
   const deleteForEveryone = (message: DevreChatMessage) => void deleteGroupMessageForEveryone(group.groupId, message.id, userId).catch(() => setError('Mesaj silinemedi.'));
   const messageActions: ChatSheetAction[] = (() => {
@@ -288,12 +291,11 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
       keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}
       keyboardShouldPersistTaps="handled"
       keyExtractor={(message) => message.id}
-      maintainVisibleContentPosition={{ autoscrollToTopThreshold: 80, minIndexForVisible: 0 }}
       onEndReached={() => void loadOlder()}
       onEndReachedThreshold={0.25}
       onScroll={handleScroll}
       onScrollToIndexFailed={({ index }) => listRef.current?.scrollToOffset({ animated: true, offset: Math.max(0, index * 72) })}
-      removeClippedSubviews={Platform.OS === 'android'}
+      removeClippedSubviews={false}
       scrollEventThrottle={32}
       ListEmptyComponent={<View style={{ alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl }}>{initialLoading ? <ActivityIndicator color={colors.primary} /> : <><AppText weight="800">{accessLost ? 'Sohbet erişimi kapandı' : 'Henüz mesaj yok.'}</AppText><AppText color="muted">{accessLost ? 'Güncel grubun hazır olduğunda burada görünecek.' : 'İlk mesajı sen gönder.'}</AppText></>}</View>}
       ListFooterComponent={loadingOlder ? <ActivityIndicator color={colors.primary} /> : null}
@@ -336,7 +338,7 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
     <ChatBottomSheet actions={deleteConfirmation ? [{ destructive: true, icon: 'trash-outline', label: 'Herkes için sil', onPress: () => { deleteForEveryone(deleteConfirmation); setDeleteConfirmation(null); } }] : []} onClose={() => setDeleteConfirmation(null)} title="Bu mesaj herkesten silinsin mi?" visible={Boolean(deleteConfirmation)} />
     <ChatCameraModal onClose={() => setCameraOpen(false)} onPhoto={(photo) => { setCameraOpen(false); setPreview(photo); }} visible={cameraOpen} />
     <PhotoPreview caption={caption} image={preview} onCaption={setCaption} onClose={() => { setPreview(null); setCaption(''); }} onSend={() => void sendImage()} sending={previewSending} />
-    {viewerImage ? <ChatImageViewer image={viewerImage} key={viewerImage.messageId} onClose={() => setViewerImage(null)} /> : null}
+    {viewerImage ? <ChatImageViewer image={viewerImage} onClose={() => setViewerImage(null)} /> : null}
     <MessageInfoModal cursors={cursors} group={group} message={infoMessage} onClose={() => setInfoMessage(null)} />
   </SafeAreaView>;
 }

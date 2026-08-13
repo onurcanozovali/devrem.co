@@ -92,7 +92,7 @@ export function ChatImageViewer({ image, onClose }: { image: ChatViewerImage; on
   }));
 
   return (
-    <Modal animationType="fade" hardwareAccelerated onRequestClose={onClose} statusBarTranslucent visible>
+    <Modal animationType="none" hardwareAccelerated onRequestClose={onClose} statusBarTranslucent visible>
       <View style={{ backgroundColor: '#000', flex: 1 }}>
         <GestureDetector gesture={gestures}>
           <Animated.View style={{ flex: 1 }}>

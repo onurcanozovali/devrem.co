@@ -125,6 +125,36 @@ test('unchanged realtime snapshots preserve message object identity for memoized
   assert.equal(merged.length, 500);
 });
 
+test('200-message mixed history paginates without duplicates or reordering', () => {
+  const history = Array.from({ length: 200 }, (_, index) => {
+    const item = scaledMessage(index);
+    return index % 11 === 0 ? { ...item, deletedForEveryone: true } : item;
+  });
+  const firstPage = history.slice(160).reverse();
+  const secondPage = history.slice(120, 160).reverse();
+  const thirdPage = history.slice(80, 120).reverse();
+  const fourthPage = history.slice(40, 80).reverse();
+  const fifthPage = history.slice(0, 40).reverse();
+  const merged = [secondPage, thirdPage, fourthPage, fifthPage]
+    .reduce((current, page) => mergeDevreChatMessages(current, page), firstPage);
+
+  assert.equal(merged.length, 200);
+  assert.equal(new Set(merged.map((item) => item.id)).size, 200);
+  assert.equal(merged[0]?.id, 'message-199');
+  assert.equal(merged.at(-1)?.id, 'message-0');
+  assert.equal(merged.filter((item) => item.deletedForEveryone).length, 19);
+});
+
+test('deterministic 20-message realtime burst stays ordered and duplicate-free', () => {
+  const burst = Array.from({ length: 20 }, (_, index) => scaledMessage(1_000 + index));
+  const repeated = burst.map((item) => ({ ...item }));
+  const merged = mergeDevreChatMessages(mergeDevreChatMessages([], burst), repeated);
+
+  assert.equal(merged.length, 20);
+  assert.equal(new Set(merged.map((item) => item.id)).size, 20);
+  assert.deepEqual(merged.map((item) => item.id), burst.toReversed().map((item) => item.id));
+});
+
 test('message clustering requires same sender and at most five minutes', () => {
   assert.equal(isSameMessageCluster(message('newer', 301), message('current', 1)), true);
   assert.equal(isSameMessageCluster(message('newer', 302), message('current', 1)), false);
