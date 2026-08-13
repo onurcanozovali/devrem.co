@@ -59,7 +59,10 @@ export async function synchronizeDevreGroupMembership(
     const transition = decideDevreGroupMembershipTransition(previous?.groupId ?? null, groupId);
 
     if (!profile || !identityKey || !groupId) {
-      if (transition.removeGroupId) transaction.delete(database.doc(`devreGroups/${transition.removeGroupId}/members/${uid}`));
+      if (transition.removeGroupId) {
+        transaction.delete(database.doc(`devreGroups/${transition.removeGroupId}/members/${uid}`));
+        transaction.delete(database.doc(`devreGroups/${transition.removeGroupId}/readCursors/${uid}`));
+      }
       transaction.delete(stateReference);
       return null;
     }
@@ -72,6 +75,7 @@ export async function synchronizeDevreGroupMembership(
     ]);
     if (transition.removeGroupId) {
       transaction.delete(database.doc(`devreGroups/${transition.removeGroupId}/members/${uid}`));
+      transaction.delete(database.doc(`devreGroups/${transition.removeGroupId}/readCursors/${uid}`));
     }
     transaction.set(groupReference, {
       groupId,
@@ -113,7 +117,10 @@ export async function deleteDevreGroupMembershipForUser(
   await database.runTransaction(async (transaction) => {
     const stateSnapshot = await transaction.get(stateReference);
     const membership = stateSnapshot.exists ? parseCurrentMembership(stateSnapshot.data()) : null;
-    if (membership) transaction.delete(database.doc(`devreGroups/${membership.groupId}/members/${uid}`));
+    if (membership) {
+      transaction.delete(database.doc(`devreGroups/${membership.groupId}/members/${uid}`));
+      transaction.delete(database.doc(`devreGroups/${membership.groupId}/readCursors/${uid}`));
+    }
     transaction.delete(stateReference);
   });
 }

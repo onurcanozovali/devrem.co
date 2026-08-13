@@ -357,10 +357,11 @@ test('group messages are member-only, immutable, bounded, and sender-authenticat
   await assertSucceeds(setDoc(messageReference, {
     id: 'message-1',
     senderUid: 'user-1',
+    type: 'text',
     text: 'Selam\ndevre',
     createdAt: serverTimestamp(),
     clientCreatedAt: Timestamp.now(),
-    schemaVersion: 1,
+    schemaVersion: 3,
   }));
   await assertSucceeds(getDocs(query(
     collection(memberDatabase, 'devreGroups', groupId, 'messages'),
@@ -375,25 +376,98 @@ test('group messages are member-only, immutable, bounded, and sender-authenticat
   await assertFails(setDoc(doc(outsiderDatabase, 'devreGroups', groupId, 'messages', 'outsider'), {
     id: 'outsider',
     senderUid: 'user-3',
+    type: 'text',
     text: 'Yetkisiz',
     createdAt: serverTimestamp(),
     clientCreatedAt: Timestamp.now(),
-    schemaVersion: 1,
+    schemaVersion: 3,
   }));
   await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'spoofed'), {
     id: 'spoofed',
     senderUid: 'user-2',
+    type: 'text',
     text: 'Sahte gönderen',
     createdAt: serverTimestamp(),
     clientCreatedAt: Timestamp.now(),
-    schemaVersion: 1,
+    schemaVersion: 3,
   }));
   await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'blank'), {
     id: 'blank',
     senderUid: 'user-1',
+    type: 'text',
     text: '   ',
     createdAt: serverTimestamp(),
     clientCreatedAt: Timestamp.now(),
-    schemaVersion: 1,
+    schemaVersion: 3,
   }));
+  await assertSucceeds(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'image-1'), {
+    id: 'image-1', senderUid: 'user-1', type: 'image',
+    mediaPath: `devreGroups/${groupId}/media/image-1/image.jpg`, caption: '', width: 1600, height: 900,
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 3,
+  }));
+  await assertSucceeds(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'audio-1'), {
+    id: 'audio-1', senderUid: 'user-1', type: 'audio',
+    mediaPath: `devreGroups/${groupId}/media/audio-1/audio.m4a`, durationMillis: 17000,
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 3,
+  }));
+  await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'bad-media'), {
+    id: 'bad-media', senderUid: 'user-1', type: 'image', mediaPath: 'other/private.jpg', caption: '', width: 800, height: 600,
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 3,
+  }));
+  await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'too-long'), {
+    id: 'too-long', senderUid: 'user-1', type: 'text', text: 'a'.repeat(1501),
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 3,
+  }));
+  await assertSucceeds(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'document-1'), {
+    id: 'document-1', senderUid: 'user-1', type: 'document',
+    mediaPath: `devreGroups/${groupId}/media/document-1/document`, fileName: 'Sevk_Belgesi.pdf',
+    mimeType: 'application/pdf', sizeBytes: 2048, extension: 'pdf',
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 3,
+  }));
+  await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'bad-document'), {
+    id: 'bad-document', senderUid: 'user-1', type: 'document',
+    mediaPath: `devreGroups/${groupId}/media/bad-document/document`, fileName: 'virus.exe',
+    mimeType: 'application/octet-stream', sizeBytes: 2048, extension: 'exe',
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 3,
+  }));
+  await assertFails(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'oversized-document'), {
+    id: 'oversized-document', senderUid: 'user-1', type: 'document',
+    mediaPath: `devreGroups/${groupId}/media/oversized-document/document`, fileName: 'Buyuk.pdf',
+    mimeType: 'application/pdf', sizeBytes: (20 * 1024 * 1024) + 1, extension: 'pdf',
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 3,
+  }));
+
+  const messageSnapshot = await getDoc(messageReference);
+  const messageCreatedAt = messageSnapshot.get('createdAt');
+  const cursorReference = doc(memberDatabase, 'devreGroups', groupId, 'readCursors', 'user-1');
+  await assertSucceeds(setDoc(cursorReference, {
+    uid: 'user-1', lastReadMessageId: 'message-1', lastReadMessageCreatedAt: messageCreatedAt,
+    lastReadAt: serverTimestamp(), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(getDoc(doc(environment.authenticatedContext('user-2').firestore(), 'devreGroups', groupId, 'readCursors', 'user-1')));
+  await assertFails(getDoc(doc(outsiderDatabase, 'devreGroups', groupId, 'readCursors', 'user-1')));
+  await assertFails(setDoc(doc(environment.authenticatedContext('user-2').firestore(), 'devreGroups', groupId, 'readCursors', 'user-1'), {
+    uid: 'user-1', lastReadMessageId: 'message-1', lastReadMessageCreatedAt: messageCreatedAt,
+    lastReadAt: serverTimestamp(), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(cursorReference, {
+    lastReadMessageCreatedAt: Timestamp.fromMillis(messageCreatedAt.toMillis() + 1),
+    lastReadAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+
+  const hiddenReference = doc(memberDatabase, 'users', 'user-1', 'hiddenGroupMessages', groupId, 'messages', 'message-1');
+  await assertSucceeds(setDoc(hiddenReference, { groupId, messageId: 'message-1', hiddenAt: serverTimestamp() }));
+  await assertSucceeds(getDoc(hiddenReference));
+  await assertFails(getDoc(doc(environment.authenticatedContext('user-2').firestore(), 'users', 'user-1', 'hiddenGroupMessages', groupId, 'messages', 'message-1')));
+  await assertFails(setDoc(doc(memberDatabase, 'users', 'user-1', 'hiddenGroupMessages', groupId, 'messages', 'message-spoof'), {
+    groupId: 'another-group', messageId: 'message-spoof', hiddenAt: serverTimestamp(),
+  }));
+
+  await assertFails(updateDoc(doc(environment.authenticatedContext('user-2').firestore(), 'devreGroups', groupId, 'messages', 'message-1'), {
+    deletedForEveryone: true, deletedAt: serverTimestamp(), deletedBy: 'user-2',
+  }));
+  await assertSucceeds(updateDoc(messageReference, {
+    deletedForEveryone: true, deletedAt: serverTimestamp(), deletedBy: 'user-1',
+  }));
+  await assertFails(updateDoc(messageReference, { deletedAt: serverTimestamp() }));
 });

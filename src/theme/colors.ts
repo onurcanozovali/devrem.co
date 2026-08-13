@@ -19,6 +19,14 @@ export interface ThemeColors {
   placeholder: string;
   overlay: string;
   overlayContent: string;
+  chatBackground: string;
+  chatBubbleMine: string;
+  chatBubbleOther: string;
+  chatTextMine: string;
+  chatTextOther: string;
+  chatTimestampMine: string;
+  chatTimestampOther: string;
+  chatDeletedText: string;
 }
 
 export const lightColors: ThemeColors = {
@@ -42,6 +50,14 @@ export const lightColors: ThemeColors = {
   placeholder: '#65736E',
   overlay: 'rgba(9, 20, 16, 0.48)',
   overlayContent: '#FFFFFF',
+  chatBackground: '#EEF3F0',
+  chatBubbleMine: '#D7F0E5',
+  chatBubbleOther: '#FFFFFF',
+  chatTextMine: '#17201D',
+  chatTextOther: '#17201D',
+  chatTimestampMine: '#526C62',
+  chatTimestampOther: '#65736E',
+  chatDeletedText: '#6D7974',
 };
 
 export const darkColors: ThemeColors = {
@@ -65,4 +81,12 @@ export const darkColors: ThemeColors = {
   placeholder: '#A5B3AD',
   overlay: 'rgba(2, 8, 5, 0.68)',
   overlayContent: '#F2F6F4',
+  chatBackground: '#0C1310',
+  chatBubbleMine: '#245A48',
+  chatBubbleOther: '#1C2722',
+  chatTextMine: '#F4F8F6',
+  chatTextOther: '#F2F6F4',
+  chatTimestampMine: '#C3D8D0',
+  chatTimestampOther: '#A5B3AD',
+  chatDeletedText: '#A5B3AD',
 };

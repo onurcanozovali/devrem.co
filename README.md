@@ -403,8 +403,82 @@ pnpm exec firebase deploy --only firestore:rules,functions:notifyDevreGroupMessa
 ```
 
 `_groupMessageNotificationDeliveries.expiresAt` için Firebase Console'dan TTL policy etkinleştirilmelidir.
-Phase 4D mevcut `@react-native-firebase/messaging` native modülünü kullanır; native dependency veya Expo config
-değişmediği için Phase 4B development build'i kuruluysa yeni EAS development build gerekmez.
+İlk metin sohbeti sürümü native değişiklik gerektirmiyordu; aşağıdaki tam sohbet deneyimi medya desteğiyle bu
+durumu değiştirmiştir.
+
+### Phase 4D tam sohbet deneyimi
+
+Sohbet artık tab içindeki bir panel değil, `group-chat/[groupId]` kök rotasında açılan tam ekran bir deneyimdir.
+Kompakt başlık grup bilgisine, üye listesine ve son paylaşılan fotoğraflara erişir. Bildirim deep link'leri de
+üyeliği yeniden doğrulayan bu rotayı kullanır. Üyelik kaybolmuşsa geçmiş içerik gösterilmez.
+
+Mesaj şeması `schemaVersion: 2` ile `text`, `image` ve `audio` tiplerini destekler. Fotoğraflar gönderilmeden
+önce en uzun kenarı 1600 piksele küçültülür ve JPEG olarak sıkıştırılır; Storage üst sınırı 5 MB'dir. Sesli
+mesajlar en fazla 3 dakika ve 10 MB olabilir. Medya yalnızca deterministic, private yollarda tutulur:
+
+```text
+devreGroups/{groupId}/media/{messageId}/image.jpg
+devreGroups/{groupId}/media/{messageId}/audio.m4a
+```
+
+Kalıcı public download URL mesaj belgesine yazılmaz. Uygulama dosyayı authenticated Storage isteğiyle yerel
+cache'e indirir. Storage Rules hem aktif grup üyeliğini Firestore'dan doğrular hem MIME, boyut, mesaj ID'si ve
+gönderen metadata'sını sınırlar. Hesap silme ortak sohbet geçmişini ve paylaşılan medyayı korur; kullanıcının grup
+üyeliği silindiğinde bu medyaya erişimi de kapanır. Grup yaşam döngüsü/retention politikası ayrıca tasarlanana kadar
+yetim medya otomatik silinmez.
+
+Backend deploy inceleme sonrasında şu kapsamla yapılmalıdır:
+
+```powershell
+pnpm exec firebase deploy --only firestore:rules,storage,functions:syncPublicProfile,functions:notifyDevreGroupMessage,functions:cleanupDeletedDevreGroupMessageMedia,functions:deleteAccount --project devrem-d985b --force
+```
+
+Storage Rules ilk kez Firestore cross-service kontrolü kullanırken Firebase CLI gerekli IAM rolünü etkinleştirmek
+için onay isteyebilir. Bu işlem deploy sırasında bilinçli olarak onaylanmalıdır.
+`--force`, `syncPublicProfile` için daha önce doğrulanan retry/failure policy değişikliğini onaylar. Bu kapsamda
+Firestore index dosyası değişmediği için index deployu gerekmez.
+
+`expo-camera`, belge seçimi ve Android `adjustResize` native yapılandırmayı değiştirdiği için mevcut
+development client yeterli değildir. Android ve iOS için yeni development build gerekir:
+
+```bash
+pnpm dlx eas-cli@latest build --profile development --platform android
+pnpm dlx eas-cli@latest build --profile development --platform ios
+```
+
+### Phase 4D production UX modeli
+
+`Devre Grubum` tanıtım onayı `acknowledgedGroupId` ile grup kimliğine bağlıdır. Kullanıcı ilk girişte tanıtımı
+görür; aynı gruba sonraki tab girişlerinde doğrudan tam ekran sohbete gider. Canonical Devre değişirse yeni grup
+ayrı bir ilk giriş olarak değerlendirilir. Sohbet kök Stack rotasıdır; geri dönüş mevcut navigation history'yi
+kullanır ve cold-start için güvenli grup bağlamına düşer.
+
+Yeni mesajlar `schemaVersion: 3` kullanır. Eski v2 text/image/audio mesajları okunmaya devam eder; migration veya
+backfill gerekmez. Yeni `document` tipi yalnızca PDF, DOC, DOCX, XLS, XLSX, PPT ve PPTX kabul eder; istemci ve
+Firestore/Storage Rules uzantı-MIME eşleşmesini doğrular ve boyutu 20 MB ile sınırlar.
+
+`Benden Sil`, `users/{uid}/hiddenGroupMessages/{groupId}/messages/{messageId}` altında owner-private bir işaret
+yazar. Yalnızca yüklenen sayfadaki message ID'leri batch sorgulandığı için sohbet büyüdükçe tüm gizli kayıtlar
+dinlenmez. `Herkesten Sil`, yalnızca gönderenin yapabildiği soft delete'tir; sıralama korunur ve UI
+`Bu mesaj silindi` gösterir. Şu anda deletion time limit yoktur. Medya, retry-safe
+`cleanupDeletedDevreGroupMessageMedia` Function'ı tarafından silinir.
+
+Okundu bilgisi mesaj başına yazılmaz. Her üye için grup altında tek bir monoton cursor tutulur:
+
+```text
+devreGroups/{groupId}/readCursors/{uid}
+```
+
+Cursor'ın işaret ettiği mesaj zamanı Rules tarafından gerçek mesaj belgesiyle doğrulanır. Bu sayede mesaj bilgisi
+ve okundu göstergesi üye x mesaj write patlaması oluşturmadan türetilir. Kullanıcı gruptan ayrıldığında veya hesabı
+silindiğinde eski cursor trusted membership senkronizasyonu tarafından kaldırılır.
+
+Kamera artık `expo-camera` `CameraView` ile Devrem'e ait photo-only arayüzdür. Belge seçimi `expo-document-picker`,
+güvenli cihaz açma/paylaşma yüzeyi `expo-sharing`, kopyalama `expo-clipboard` kullanır. Composer gerçek layout
+akışında tutulur; Android `adjustResize`, iOS `KeyboardAvoidingView` ile mesaj listesinin üstüne binmeden klavyeye
+uyum sağlar. Ses kaydı üründen çıkarılmış, mikrofon izni kaldırılmıştır; eski sesli mesajlar geriye uyumlu olarak
+oynatılabilir. Android prebuild manifestinde `CAMERA` ve `adjustResize` doğrulanmıştır. Bu native değişikliklerin
+tamamı yeni development build gerektirir; eski APK'ya JS update göndermek native izinleri değiştirmez.
 
 ## Tema ve UI kuralları
 

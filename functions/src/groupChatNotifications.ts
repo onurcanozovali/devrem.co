@@ -93,9 +93,9 @@ async function notifyRecipient(input: {
   recipientUid: string;
   senderName: string;
   senderUid: string;
-  text: string;
+  message: NonNullable<ReturnType<typeof parseGroupChatMessage>>;
 }): Promise<void> {
-  const { database, groupId, messageId, messaging, recipientUid, senderName, senderUid, text } = input;
+  const { database, groupId, message, messageId, messaging, recipientUid, senderName, senderUid } = input;
   const preferences = await database.doc(`users/${recipientUid}/notificationPreferences/main`).get();
   if (!preferences.exists || !allowsGroupMessageNotifications(preferences.data())) return;
   const deliveryId = await reserveDelivery({ database, groupId, messageId, recipientUid, senderUid });
@@ -106,7 +106,7 @@ async function notifyRecipient(input: {
     await delivery.update({ status: 'no-active-devices', updatedAt: FieldValue.serverTimestamp() });
     return;
   }
-  const copy = createGroupMessageNotificationCopy(senderName, text);
+  const copy = createGroupMessageNotificationCopy(senderName, message);
   try {
     const response = await messaging.sendEach(devices.map(({ token }) => ({
       token,
@@ -161,6 +161,13 @@ export async function processGroupChatMessage(input: {
     logger.warn('Malformed group message event ignored.', { groupId, messageId });
     return;
   }
+  const expectedMediaPath = message.type === 'text'
+    ? null
+    : `devreGroups/${groupId}/media/${messageId}/${message.type === 'image' ? 'image.jpg' : message.type === 'audio' ? 'audio.m4a' : 'document'}`;
+  if (message.mediaPath !== expectedMediaPath) {
+    logger.warn('Group message with an invalid media path ignored.', { groupId, messageId });
+    return;
+  }
   const [group, senderMembership, senderProfile, members] = await Promise.all([
     database.doc(`devreGroups/${groupId}`).get(),
     database.doc(`devreGroups/${groupId}/members/${message.senderUid}`).get(),
@@ -191,7 +198,7 @@ export async function processGroupChatMessage(input: {
       recipientUid,
       senderName,
       senderUid: message.senderUid,
-      text: message.text,
+      message,
     })));
   }
 }

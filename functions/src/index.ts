@@ -4,13 +4,14 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { getStorage } from 'firebase-admin/storage';
 import { initializeApp } from 'firebase-admin/app';
 import { logger } from 'firebase-functions';
-import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { deleteAccountData, getProfilePhotoPath, isAuthUserMissing } from './accountDeletion.js';
 import { deleteDevreGroupMembershipForUser, synchronizeDevreGroupMembership } from './devreGroups.js';
 import { deleteNotificationDataForUser, processDiscoveryMembershipChange } from './discoveryNotifications.js';
 import { synchronizePublicProfile } from './publicProfileSync.js';
 import { deleteGroupNotificationDataForUser, processGroupChatMessage } from './groupChatNotifications.js';
+import { cleanupDeletedGroupMessageMedia } from './groupChatDeletion.js';
 
 initializeApp();
 
@@ -55,6 +56,23 @@ export const notifyDevreGroupMessage = onDocumentCreated(
       value: event.data?.data() ?? null,
     });
   },
+);
+
+export const cleanupDeletedDevreGroupMessageMedia = onDocumentUpdated(
+  {
+    document: 'devreGroups/{groupId}/messages/{messageId}',
+    memory: '256MiB',
+    region: 'europe-west1',
+    retry: true,
+    timeoutSeconds: 120,
+  },
+  async (event) => cleanupDeletedGroupMessageMedia({
+    after: event.data?.after.data() ?? null,
+    before: event.data?.before.data() ?? null,
+    bucket: getStorage().bucket(),
+    groupId: event.params.groupId,
+    messageId: event.params.messageId,
+  }),
 );
 
 function readBearerToken(authorizationHeader: string | undefined): string | null {

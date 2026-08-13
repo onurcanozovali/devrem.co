@@ -26,6 +26,10 @@ function assertReadablePalette(name: string, colors: ThemeColors): void {
     ['placeholder', colors.placeholder, colors.inputBackground],
     ['primary action text', colors.textInverse, colors.primary],
     ['danger text', colors.danger, colors.background],
+    ['outgoing chat text', colors.chatTextMine, colors.chatBubbleMine],
+    ['incoming chat text', colors.chatTextOther, colors.chatBubbleOther],
+    ['outgoing timestamp', colors.chatTimestampMine, colors.chatBubbleMine],
+    ['incoming timestamp', colors.chatTimestampOther, colors.chatBubbleOther],
   ] as const;
   for (const [label, foreground, background] of pairs) {
     assert.ok(

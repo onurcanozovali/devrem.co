@@ -424,6 +424,17 @@ service cloud.firestore {
       allow delete: if isOwnProfile(uid) && stateId == 'main';
     }
 
+    match /users/{uid}/hiddenGroupMessages/{groupId}/messages/{messageId} {
+      allow read: if isOwnProfile(uid);
+      allow create: if isOwnProfile(uid)
+        && request.resource.data.keys().hasOnly(['groupId', 'messageId', 'hiddenAt'])
+        && request.resource.data.groupId == groupId
+        && request.resource.data.messageId == messageId
+        && request.resource.data.hiddenAt == request.time;
+      allow update: if false;
+      allow delete: if isOwnProfile(uid);
+    }
+
     match /_devreGroupMemberships/{uid} {
       allow read: if isOwnProfile(uid);
       allow create, update, delete: if false;
@@ -441,24 +452,111 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isDevreGroupMember(groupId);
         allow create: if isDevreGroupMember(groupId)
-          && request.resource.data.keys().hasOnly([
-            'id',
-            'senderUid',
-            'text',
-            'createdAt',
-            'clientCreatedAt',
-            'schemaVersion'
-          ])
           && request.resource.data.id == messageId
           && request.resource.data.senderUid == request.auth.uid
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 1500
-          && request.resource.data.text.matches('^\\S([\\s\\S]*\\S)?$')
           && request.resource.data.createdAt == request.time
           && request.resource.data.clientCreatedAt is timestamp
-          && request.resource.data.schemaVersion == 1;
-        allow update, delete: if false;
+          && request.resource.data.schemaVersion == 3
+          && (
+            (
+              request.resource.data.type == 'text'
+              && request.resource.data.keys().hasOnly([
+                'id', 'senderUid', 'type', 'text', 'createdAt', 'clientCreatedAt', 'schemaVersion'
+              ])
+              && request.resource.data.text is string
+              && request.resource.data.text.size() > 0
+              && request.resource.data.text.size() <= 1500
+              && request.resource.data.text.matches('^\\S([\\s\\S]*\\S)?$')
+            )
+            || (
+              request.resource.data.type == 'image'
+              && request.resource.data.keys().hasOnly([
+                'id', 'senderUid', 'type', 'mediaPath', 'caption', 'width', 'height',
+                'createdAt', 'clientCreatedAt', 'schemaVersion'
+              ])
+              && request.resource.data.mediaPath == 'devreGroups/' + groupId + '/media/' + messageId + '/image.jpg'
+              && request.resource.data.caption is string
+              && request.resource.data.caption.size() <= 1500
+              && (request.resource.data.caption.size() == 0 || request.resource.data.caption.matches('^\\S([\\s\\S]*\\S)?$'))
+              && request.resource.data.width is int
+              && request.resource.data.height is int
+              && request.resource.data.width > 0
+              && request.resource.data.height > 0
+              && request.resource.data.width <= 1600
+              && request.resource.data.height <= 1600
+            )
+            || (
+              request.resource.data.type == 'audio'
+              && request.resource.data.keys().hasOnly([
+                'id', 'senderUid', 'type', 'mediaPath', 'durationMillis',
+                'createdAt', 'clientCreatedAt', 'schemaVersion'
+              ])
+              && request.resource.data.mediaPath == 'devreGroups/' + groupId + '/media/' + messageId + '/audio.m4a'
+              && request.resource.data.durationMillis is int
+              && request.resource.data.durationMillis > 0
+              && request.resource.data.durationMillis <= 180000
+            )
+            || (
+              request.resource.data.type == 'document'
+              && request.resource.data.keys().hasOnly([
+                'id', 'senderUid', 'type', 'mediaPath', 'fileName', 'mimeType', 'sizeBytes',
+                'extension', 'createdAt', 'clientCreatedAt', 'schemaVersion'
+              ])
+              && request.resource.data.mediaPath == 'devreGroups/' + groupId + '/media/' + messageId + '/document'
+              && request.resource.data.fileName is string
+              && request.resource.data.fileName.size() > 0
+              && request.resource.data.fileName.size() <= 120
+              && request.resource.data.sizeBytes is int
+              && request.resource.data.sizeBytes > 0
+              && request.resource.data.sizeBytes <= 20 * 1024 * 1024
+              && (
+                (request.resource.data.extension == 'pdf' && request.resource.data.mimeType == 'application/pdf')
+                || (request.resource.data.extension == 'doc' && request.resource.data.mimeType == 'application/msword')
+                || (request.resource.data.extension == 'docx' && request.resource.data.mimeType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+                || (request.resource.data.extension == 'xls' && request.resource.data.mimeType == 'application/vnd.ms-excel')
+                || (request.resource.data.extension == 'xlsx' && request.resource.data.mimeType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                || (request.resource.data.extension == 'ppt' && request.resource.data.mimeType == 'application/vnd.ms-powerpoint')
+                || (request.resource.data.extension == 'pptx' && request.resource.data.mimeType == 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
+              )
+            )
+          );
+        allow update: if isDevreGroupMember(groupId)
+          && resource.data.senderUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'deletedForEveryone', 'deletedAt', 'deletedBy'
+          ])
+          && !resource.data.keys().hasAny(['deletedForEveryone'])
+          && request.resource.data.deletedForEveryone == true
+          && request.resource.data.deletedAt == request.time
+          && request.resource.data.deletedBy == request.auth.uid;
+        allow delete: if false;
+      }
+
+      match /readCursors/{uid} {
+        allow read: if isDevreGroupMember(groupId);
+        allow create: if isDevreGroupMember(groupId)
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly([
+            'uid', 'lastReadMessageId', 'lastReadMessageCreatedAt', 'lastReadAt', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.uid == uid
+          && request.resource.data.lastReadMessageId is string
+          && request.resource.data.lastReadMessageCreatedAt == get(/databases/$(database)/documents/devreGroups/$(groupId)/messages/$(request.resource.data.lastReadMessageId)).data.createdAt
+          && request.resource.data.lastReadAt == request.time
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if isDevreGroupMember(groupId)
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly([
+            'uid', 'lastReadMessageId', 'lastReadMessageCreatedAt', 'lastReadAt', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.uid == uid
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.lastReadMessageCreatedAt >= resource.data.lastReadMessageCreatedAt
+          && request.resource.data.lastReadMessageCreatedAt == get(/databases/$(database)/documents/devreGroups/$(groupId)/messages/$(request.resource.data.lastReadMessageId)).data.createdAt
+          && request.resource.data.lastReadAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if request.auth.uid == uid;
       }
     }
 

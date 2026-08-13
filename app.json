@@ -12,7 +12,9 @@
     },
     "android": {
       "package": "com.devrem.app",
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": ["CAMERA"]
     },
     "plugins": [
       "expo-router",
@@ -21,9 +23,24 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Devrem, profil fotoğrafını seçebilmen için fotoğraflarına erişir.",
-          "cameraPermission": false,
+          "photosPermission": "Devrem, profil fotoğrafı seçebilmen ve Devre grubunda fotoğraf paylaşabilmen için fotoğraflarına erişir.",
+          "cameraPermission": "Devrem, Devre grubunda fotoğraf çekebilmen için kameraya erişir.",
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Devrem, Devre grubunda fotoğraf çekebilmen için kameraya erişir."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
         }
       ],
       "@react-native-firebase/app",

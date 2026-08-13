@@ -27,7 +27,25 @@ export {
   fetchOlderDevreChatMessages,
   sendDevreChatMessage,
   subscribeToRecentDevreChatMessages,
+  createAudioMessageDraft,
+  createDevreChatMessageId,
+  createImageMessageDraft,
+  createDocumentMessageDraft,
+  deleteGroupMessageForEveryone,
+  fetchHiddenGroupMessageIds,
+  fetchRecentGroupImages,
+  fetchRecentGroupDocuments,
+  hideGroupMessageForUser,
+  markDevreGroupRead,
+  subscribeToGroupReadCursors,
 } from './chat';
+export type { DevreChatCursor, DevreGroupReadCursor } from './chat';
+export {
+  deleteChatMedia,
+  getChatMediaPath,
+  resolveChatMediaLocalUri,
+  uploadChatMedia,
+} from './chatMedia';
 export { deleteProfilePhoto, resolveProfilePhotoURL, uploadProfilePhoto } from './profilePhoto';
 export {
   deleteCurrentNotificationDevice,

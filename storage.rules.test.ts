@@ -10,21 +10,48 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { deleteObject, getBytes, ref, uploadBytes } from 'firebase/storage';
+import { doc, setDoc } from 'firebase/firestore';
 
 const projectId = 'devrem-storage-rules-test';
 const avatarPath = 'users/user-1/profile/avatar.jpg';
 const jpegMetadata = { contentType: 'image/jpeg' };
+const groupId = `devre-v1-${'a'.repeat(64)}`;
+const chatImagePath = `devreGroups/${groupId}/media/message-1/image.jpg`;
+const chatImageMetadata = {
+  contentType: 'image/jpeg',
+  customMetadata: { kind: 'image', messageId: 'message-1', senderUid: 'user-1' },
+};
+const chatAudioPath = `devreGroups/${groupId}/media/message-2/audio.m4a`;
+const chatAudioMetadata = {
+  contentType: 'audio/mp4',
+  customMetadata: { kind: 'audio', messageId: 'message-2', senderUid: 'user-1' },
+};
+const chatDocumentPath = `devreGroups/${groupId}/media/message-3/document`;
+const chatDocumentMetadata = {
+  contentType: 'application/pdf',
+  customMetadata: {
+    extension: 'pdf', fileName: 'Sevk_Belgesi.pdf', kind: 'document',
+    messageId: 'message-3', senderUid: 'user-1',
+  },
+};
 let environment: RulesTestEnvironment;
 
 before(async () => {
   environment = await initializeTestEnvironment({
     projectId,
+    firestore: { rules: await readFile('firestore.rules', 'utf8') },
     storage: { rules: await readFile('storage.rules', 'utf8') },
   });
 });
 
 beforeEach(async () => {
   await environment.clearStorage();
+  await environment.clearFirestore();
+  await environment.withSecurityRulesDisabled(async (context) => {
+    for (const uid of ['user-1', 'user-2']) {
+      await setDoc(doc(context.firestore(), 'devreGroups', groupId, 'members', uid), { uid });
+    }
+  });
 });
 
 after(async () => {
@@ -75,4 +102,67 @@ test('non-JPEG, oversized, and arbitrary-path writes are denied', async () => {
     new Uint8Array([1, 2, 3]),
     jpegMetadata,
   ));
+});
+
+test('only active group members may upload and read private chat images', async () => {
+  const ownerImage = ref(environment.authenticatedContext('user-1').storage(), chatImagePath);
+  await assertSucceeds(uploadBytes(ownerImage, new Uint8Array([1, 2, 3]), chatImageMetadata));
+  await assertSucceeds(getBytes(ref(environment.authenticatedContext('user-2').storage(), chatImagePath)));
+  await assertFails(getBytes(ref(environment.authenticatedContext('user-3').storage(), chatImagePath)));
+  await assertFails(uploadBytes(
+    ref(environment.authenticatedContext('user-3').storage(), chatImagePath),
+    new Uint8Array([4]),
+    { ...chatImageMetadata, customMetadata: { ...chatImageMetadata.customMetadata, senderUid: 'user-3' } },
+  ));
+});
+
+test('chat media rejects spoofed metadata, video, arbitrary paths, and cross-user mutation', async () => {
+  const owner = environment.authenticatedContext('user-1').storage();
+  const ownerImage = ref(owner, chatImagePath);
+  await assertFails(uploadBytes(ownerImage, new Uint8Array([1]), {
+    ...chatImageMetadata,
+    customMetadata: { ...chatImageMetadata.customMetadata, senderUid: 'user-2' },
+  }));
+  await assertFails(uploadBytes(ref(owner, `devreGroups/${groupId}/media/message-1/video.mp4`), new Uint8Array([1]), { contentType: 'video/mp4' }));
+  await assertSucceeds(uploadBytes(ownerImage, new Uint8Array([1]), chatImageMetadata));
+  await assertFails(uploadBytes(
+    ref(environment.authenticatedContext('user-2').storage(), chatImagePath),
+    new Uint8Array([2]),
+    { ...chatImageMetadata, customMetadata: { ...chatImageMetadata.customMetadata, senderUid: 'user-2' } },
+  ));
+  await assertFails(deleteObject(ref(environment.authenticatedContext('user-2').storage(), chatImagePath)));
+});
+
+test('only active members may upload and read bounded chat audio', async () => {
+  const ownerAudio = ref(environment.authenticatedContext('user-1').storage(), chatAudioPath);
+  await assertSucceeds(uploadBytes(ownerAudio, new Uint8Array([1, 2, 3]), chatAudioMetadata));
+  await assertSucceeds(getBytes(ref(environment.authenticatedContext('user-2').storage(), chatAudioPath)));
+  await assertFails(getBytes(ref(environment.authenticatedContext('user-3').storage(), chatAudioPath)));
+  await assertFails(uploadBytes(ref(environment.authenticatedContext('user-1').storage(), chatAudioPath), new Uint8Array([1]), {
+    ...chatAudioMetadata,
+    contentType: 'video/mp4',
+  }));
+  await assertFails(uploadBytes(ref(environment.authenticatedContext('user-1').storage(), chatAudioPath), new Uint8Array([1]), {
+    ...chatAudioMetadata,
+    customMetadata: { ...chatAudioMetadata.customMetadata, messageId: 'wrong-id' },
+  }));
+});
+
+test('documents are private, bounded, and restricted to approved MIME-extension pairs', async () => {
+  const owner = environment.authenticatedContext('user-1').storage();
+  const document = ref(owner, chatDocumentPath);
+  await assertSucceeds(uploadBytes(document, new Uint8Array([1, 2, 3]), chatDocumentMetadata));
+  await assertSucceeds(getBytes(ref(environment.authenticatedContext('user-2').storage(), chatDocumentPath)));
+  await assertFails(getBytes(ref(environment.authenticatedContext('user-3').storage(), chatDocumentPath)));
+  await assertFails(uploadBytes(document, new Uint8Array([1]), {
+    ...chatDocumentMetadata,
+    contentType: 'application/octet-stream',
+  }));
+  await assertFails(uploadBytes(document, new Uint8Array([1]), {
+    ...chatDocumentMetadata,
+    customMetadata: { ...chatDocumentMetadata.customMetadata, extension: 'exe' },
+  }));
+  await assertFails(uploadBytes(ref(owner, `devreGroups/${groupId}/media/message-3/archive.zip`), new Uint8Array([1]), {
+    contentType: 'application/zip',
+  }));
 });
