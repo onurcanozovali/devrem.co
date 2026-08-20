@@ -1,11 +1,30 @@
-let suppressNextAutomaticOpen = false;
+export const groupChatReturnPaths = [
+  '/(tabs)',
+  '/(tabs)/preparation',
+  '/(tabs)/matching',
+  '/(tabs)/profile',
+] as const;
 
-export function markReturningFromGroupChat(): void {
-  suppressNextAutomaticOpen = true;
+export type GroupChatReturnPath = typeof groupChatReturnPaths[number];
+
+let returnPath: GroupChatReturnPath = '/(tabs)';
+
+export function rememberGroupChatReturnTab(routeName: string | undefined): void {
+  const paths: Record<string, GroupChatReturnPath> = {
+    index: '/(tabs)',
+    preparation: '/(tabs)/preparation',
+    matching: '/(tabs)/matching',
+    profile: '/(tabs)/profile',
+  };
+  if (routeName && paths[routeName]) returnPath = paths[routeName];
 }
 
-export function consumeGroupChatReturnSuppression(): boolean {
-  if (!suppressNextAutomaticOpen) return false;
-  suppressNextAutomaticOpen = false;
-  return true;
+export function getGroupChatReturnPath(): GroupChatReturnPath {
+  return returnPath;
+}
+
+export function parseGroupChatReturnPath(value: string | string[] | undefined): GroupChatReturnPath | null {
+  return typeof value === 'string' && groupChatReturnPaths.some((path) => path === value)
+    ? value as GroupChatReturnPath
+    : null;
 }

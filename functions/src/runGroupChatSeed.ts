@@ -17,14 +17,14 @@ const requestedCount = Number(readArgument('--count') ?? '10');
 if (projectId !== developmentProjectId) {
   throw new Error(`Refusing to run unless GCLOUD_PROJECT is exactly ${developmentProjectId}.`);
 }
-if (action !== 'seed' && action !== 'clear') {
-  throw new Error('Expected seed or clear action.');
+if (action !== 'seed' && action !== 'burst' && action !== 'clear') {
+  throw new Error('Expected seed, burst, or clear action.');
 }
 if (!groupId || !/^devre-v1-[a-f0-9]{64}$/.test(groupId)) {
   throw new Error('Supply an exact Devre group with --group devre-v1-<64 hex characters>.');
 }
-if (action === 'seed' && requestedCount !== 10 && requestedCount !== 60) {
-  throw new Error('--count must be either 10 or 60.');
+if (action === 'seed' && requestedCount !== 10 && requestedCount !== 60 && requestedCount !== 200) {
+  throw new Error('--count must be 10, 60, or 200.');
 }
 
 const app = initializeApp({ projectId, credential: applicationDefault() });
@@ -66,7 +66,8 @@ async function seedMessages(): Promise<number> {
         : `Geliştirme mesajı ${index + 1}`,
       createdAt: timestamp,
       clientCreatedAt: timestamp,
-        schemaVersion: 3,
+        replyToMessageId: null,
+        schemaVersion: 4,
       developmentSeed: true,
     });
   }
@@ -74,9 +75,41 @@ async function seedMessages(): Promise<number> {
   return requestedCount;
 }
 
+async function burstMessages(): Promise<number> {
+  const [group, members] = await Promise.all([
+    database.doc(`devreGroups/${groupId}`).get(),
+    database.collection(`devreGroups/${groupId}/members`).limit(50).get(),
+  ]);
+  if (!group.exists) throw new Error('The explicitly supplied group does not exist.');
+  if (members.empty) throw new Error('The explicitly supplied group has no members.');
+  await clearSeedMessages();
+  const senderUids = members.docs.map((document) => document.id);
+  for (let index = 0; index < 20; index += 1) {
+    const id = `${seedPrefix}burst-${String(index + 1).padStart(3, '0')}`;
+    const timestamp = Timestamp.fromMillis(Date.now() + index);
+    await database.doc(`devreGroups/${groupId}/messages/${id}`).set({
+      id,
+      senderUid: senderUids[index % senderUids.length],
+      type: 'text',
+      text: `Geliştirme burst mesajı ${index + 1}`,
+      createdAt: timestamp,
+      clientCreatedAt: timestamp,
+      replyToMessageId: null,
+      schemaVersion: 4,
+      developmentSeed: true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return 20;
+}
+
 (async () => {
-  const count = action === 'clear' ? await clearSeedMessages() : await seedMessages();
-  console.info(`${action === 'clear' ? 'Cleared' : 'Seeded'} ${count} development-only chat messages in ${groupId}.`);
+  const count = action === 'clear'
+    ? await clearSeedMessages()
+    : action === 'burst'
+      ? await burstMessages()
+      : await seedMessages();
+  console.info(`${action === 'clear' ? 'Cleared' : action === 'burst' ? 'Burst-seeded' : 'Seeded'} ${count} development-only chat messages in ${groupId}.`);
   console.info('Development seed messages are ignored by the notification Function.');
 })().catch((error: unknown) => {
   console.error(`Group chat ${action} failed.`, error);

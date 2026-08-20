@@ -11,6 +11,24 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/devreGroups/$(groupId)/members/$(request.auth.uid));
     }
 
+    function isValidGroupMessageReply(groupId, messageId) {
+      return (
+          request.resource.data.schemaVersion == 3
+          && !request.resource.data.keys().hasAny(['replyToMessageId'])
+        ) || (
+          request.resource.data.schemaVersion == 4
+          && request.resource.data.keys().hasAll(['replyToMessageId'])
+          && (
+            request.resource.data.replyToMessageId == null
+            || (
+              request.resource.data.replyToMessageId is string
+              && request.resource.data.replyToMessageId != messageId
+              && exists(/databases/$(database)/documents/devreGroups/$(groupId)/messages/$(request.resource.data.replyToMessageId))
+            )
+          )
+        );
+    }
+
     function isOwnProfile(uid) {
       return isSignedIn() && request.auth.uid == uid;
     }
@@ -456,12 +474,12 @@ service cloud.firestore {
           && request.resource.data.senderUid == request.auth.uid
           && request.resource.data.createdAt == request.time
           && request.resource.data.clientCreatedAt is timestamp
-          && request.resource.data.schemaVersion == 3
+          && isValidGroupMessageReply(groupId, messageId)
           && (
             (
               request.resource.data.type == 'text'
               && request.resource.data.keys().hasOnly([
-                'id', 'senderUid', 'type', 'text', 'createdAt', 'clientCreatedAt', 'schemaVersion'
+                'id', 'senderUid', 'type', 'text', 'createdAt', 'clientCreatedAt', 'replyToMessageId', 'schemaVersion'
               ])
               && request.resource.data.text is string
               && request.resource.data.text.size() > 0
@@ -472,7 +490,7 @@ service cloud.firestore {
               request.resource.data.type == 'image'
               && request.resource.data.keys().hasOnly([
                 'id', 'senderUid', 'type', 'mediaPath', 'caption', 'width', 'height',
-                'createdAt', 'clientCreatedAt', 'schemaVersion'
+                'createdAt', 'clientCreatedAt', 'replyToMessageId', 'schemaVersion'
               ])
               && request.resource.data.mediaPath == 'devreGroups/' + groupId + '/media/' + messageId + '/image.jpg'
               && request.resource.data.caption is string
@@ -489,7 +507,7 @@ service cloud.firestore {
               request.resource.data.type == 'audio'
               && request.resource.data.keys().hasOnly([
                 'id', 'senderUid', 'type', 'mediaPath', 'durationMillis',
-                'createdAt', 'clientCreatedAt', 'schemaVersion'
+                'createdAt', 'clientCreatedAt', 'replyToMessageId', 'schemaVersion'
               ])
               && request.resource.data.mediaPath == 'devreGroups/' + groupId + '/media/' + messageId + '/audio.m4a'
               && request.resource.data.durationMillis is int
@@ -500,7 +518,7 @@ service cloud.firestore {
               request.resource.data.type == 'document'
               && request.resource.data.keys().hasOnly([
                 'id', 'senderUid', 'type', 'mediaPath', 'fileName', 'mimeType', 'sizeBytes',
-                'extension', 'createdAt', 'clientCreatedAt', 'schemaVersion'
+                'extension', 'createdAt', 'clientCreatedAt', 'replyToMessageId', 'schemaVersion'
               ])
               && request.resource.data.mediaPath == 'devreGroups/' + groupId + '/media/' + messageId + '/document'
               && request.resource.data.fileName is string

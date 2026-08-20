@@ -34,6 +34,15 @@ export function parseGroupChatMessage(messageId: string, value: unknown): GroupC
     || typeof value.senderUid !== 'string'
     || value.senderUid.trim().length === 0
   ) return null;
+  if (
+    value.replyToMessageId !== undefined
+    && value.replyToMessageId !== null
+    && (
+      typeof value.replyToMessageId !== 'string'
+      || value.replyToMessageId.trim().length === 0
+      || value.replyToMessageId === messageId
+    )
+  ) return null;
   const type = value.type ?? 'text';
   if (type === 'text' && typeof value.text === 'string') {
     const text = value.text.trim();

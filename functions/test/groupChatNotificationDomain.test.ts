@@ -20,6 +20,8 @@ test('message parsing accepts bounded text and rejects malformed events permanen
   assert.equal(parseGroupChatMessage('message-1', { id: 'wrong', senderUid: 'user-1', text: 'Selam' }), null);
   assert.equal(parseGroupChatMessage('message-1', { id: 'message-1', senderUid: '', text: 'Selam' }), null);
   assert.equal(parseGroupChatMessage('message-1', { id: 'message-1', senderUid: 'user-1', text: ' '.repeat(2) }), null);
+  assert.equal(parseGroupChatMessage('message-1', { id: 'message-1', senderUid: 'user-1', text: 'Selam', replyToMessageId: 'message-1' }), null);
+  assert.equal(parseGroupChatMessage('message-1', { id: 'message-1', senderUid: 'user-1', text: 'Selam', replyToMessageId: 42 }), null);
   assert.deepEqual(parseGroupChatMessage('image-1', {
     id: 'image-1', senderUid: 'user-1', type: 'image', mediaPath: 'image.jpg', caption: '', width: 1600, height: 900,
   }), { id: 'image-1', senderUid: 'user-1', type: 'image', text: null, mediaPath: 'image.jpg', fileName: null });

@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "devrem",
+    "icon": "./assets/branding/icon-padded.png",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.devrem.app"
@@ -14,11 +15,51 @@
       "package": "com.devrem.app",
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
-      "permissions": ["CAMERA"]
+      "permissions": ["CAMERA"],
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/branding/adaptive-icon-foreground-padded.png",
+        "backgroundColor": "#006440"
+      }
     },
     "plugins": [
       "expo-router",
       "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#006440",
+          "image": "./assets/branding/splash-brand-lockup.png",
+          "imageWidth": 340,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#006440",
+            "image": "./assets/branding/splash-brand-lockup.png"
+          }
+        }
+      ],
+      "./plugins/withDevremAndroidShareTarget",
+      [
+        "expo-sharing",
+        {
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "application/pdf",
+              "application/msword",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "application/vnd.ms-excel",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              "application/vnd.ms-powerpoint",
+              "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            ],
+            "multipleShareMimeTypes": []
+          }
+        }
+      ],
       "@react-native-community/datetimepicker",
       [
         "expo-image-picker",

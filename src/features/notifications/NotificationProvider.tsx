@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
@@ -206,6 +206,25 @@ export function NotificationProvider({ children }: PropsWithChildren) {
       setStatus('ready');
     });
     return () => { active = false; };
+  }, [authStatus, session]);
+
+  useEffect(() => {
+    if (authStatus !== 'authenticated' || !session) return undefined;
+    let registrationInFlight = false;
+    const refreshRegistration = () => {
+      if (registrationInFlight || !preferencesRef.current.enabled) return;
+      registrationInFlight = true;
+      void getNotificationPermissionState().then(async (nextPermission) => {
+        setPermission(nextPermission);
+        if (nextPermission === 'authorized') await registerCurrentNotificationDevice(session.userId);
+      }).catch((caughtError: unknown) => {
+        setError(getNotificationErrorMessage(caughtError));
+      }).finally(() => { registrationInFlight = false; });
+    };
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') refreshRegistration();
+    });
+    return () => subscription.remove();
   }, [authStatus, session]);
 
   useEffect(() => {
