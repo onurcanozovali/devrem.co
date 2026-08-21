@@ -9,10 +9,7 @@ service cloud.firestore {
     function isDevreGroupMember(groupId) {
       return isSignedIn()
         && exists(/databases/$(database)/documents/devreGroups/$(groupId)/members/$(request.auth.uid))
-        && (
-          !('status' in get(/databases/$(database)/documents/devreGroups/$(groupId)/members/$(request.auth.uid)).data)
-          || get(/databases/$(database)/documents/devreGroups/$(groupId)/members/$(request.auth.uid)).data.status == 'active'
-        );
+        && get(/databases/$(database)/documents/devreGroups/$(groupId)/members/$(request.auth.uid)).data.status == 'active';
     }
 
     function isValidGroupMessageReply(groupId, messageId) {
@@ -35,6 +32,46 @@ service cloud.firestore {
 
     function isOwnProfile(uid) {
       return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function hasExactDevreAccess(profile) {
+      let viewer = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && viewer.militaryPeriodYear == profile.militaryPeriodYear
+        && viewer.militaryPeriodMonth == profile.militaryPeriodMonth
+        && viewer.militaryCity == profile.militaryCity
+        && viewer.militaryType == profile.militaryType
+        && (
+          (
+            profile.keys().hasAll(['militaryUnitId'])
+            && viewer.keys().hasAll(['militaryUnitId'])
+            && profile.militaryUnitId is string
+            && viewer.militaryUnitId is string
+            && profile.militaryUnitId == viewer.militaryUnitId
+          )
+          || (
+            (!profile.keys().hasAll(['militaryUnitId']) || profile.militaryUnitId == null)
+            && profile.militaryUnitName is string
+            && (
+              (viewer.keys().hasAll(['militaryUnitNameSnapshot']) && viewer.militaryUnitNameSnapshot == profile.militaryUnitName)
+              || viewer.militaryUnit == profile.militaryUnitName
+            )
+          )
+        );
+    }
+
+    function sharesCurrentGroup(uid, pointerCollection) {
+      let pointerPath = /databases/$(database)/documents/$(pointerCollection)/$(request.auth.uid);
+      return exists(pointerPath)
+        && isDevreGroupMember(get(pointerPath).data.groupId)
+        && exists(/databases/$(database)/documents/devreGroups/$(get(pointerPath).data.groupId)/members/$(uid));
+    }
+
+    function canReadPublicProfile(uid) {
+      return isOwnProfile(uid)
+        || (isSignedIn() && hasExactDevreAccess(resource.data))
+        || (isSignedIn() && sharesCurrentGroup(uid, '_devreGroupMemberships'))
+        || (isSignedIn() && sharesCurrentGroup(uid, '_travelGroupMemberships'));
     }
 
     function hasValidProfileShape(uid) {
@@ -371,7 +408,7 @@ service cloud.firestore {
     }
 
     match /publicProfiles/{uid} {
-      allow read: if isSignedIn();
+      allow read: if canReadPublicProfile(uid);
       allow create, update, delete: if false;
     }
 
@@ -563,13 +600,26 @@ service cloud.firestore {
         && request.resource.data.reporterUid == request.auth.uid
         && request.resource.data.reportedUid is string
         && request.resource.data.reportedUid != request.auth.uid
-        && request.resource.data.conversationType == 'direct'
         && request.resource.data.conversationId is string
-        && isDirectParticipant(request.resource.data.conversationId)
-        && (request.resource.data.messageId == null || (
-          request.resource.data.messageId is string
-          && exists(/databases/$(database)/documents/directConversations/$(request.resource.data.conversationId)/messages/$(request.resource.data.messageId))
-        ))
+        && (
+          (
+            request.resource.data.conversationType == 'direct'
+            && isDirectParticipant(request.resource.data.conversationId)
+            && request.resource.data.reportedUid in get(/databases/$(database)/documents/directConversations/$(request.resource.data.conversationId)).data.participantUids
+            && (request.resource.data.messageId == null || (
+              request.resource.data.messageId is string
+              && exists(/databases/$(database)/documents/directConversations/$(request.resource.data.conversationId)/messages/$(request.resource.data.messageId))
+              && get(/databases/$(database)/documents/directConversations/$(request.resource.data.conversationId)/messages/$(request.resource.data.messageId)).data.senderUid == request.resource.data.reportedUid
+            ))
+          )
+          || (
+            request.resource.data.conversationType == 'group'
+            && isDevreGroupMember(request.resource.data.conversationId)
+            && request.resource.data.messageId is string
+            && exists(/databases/$(database)/documents/devreGroups/$(request.resource.data.conversationId)/messages/$(request.resource.data.messageId))
+            && get(/databases/$(database)/documents/devreGroups/$(request.resource.data.conversationId)/messages/$(request.resource.data.messageId)).data.senderUid == request.resource.data.reportedUid
+          )
+        )
         && request.resource.data.reason in ['Spam', 'Taciz / rahatsız etme', 'Uygunsuz içerik', 'Sahte / yanıltıcı profil', 'Diğer']
         && request.resource.data.status == 'open'
         && request.resource.data.createdAt == request.time;

@@ -5,10 +5,7 @@ service firebase.storage {
     function isDevreGroupMember(groupId) {
       return request.auth != null
         && firestore.exists(/databases/(default)/documents/devreGroups/$(groupId)/members/$(request.auth.uid))
-        && (
-          !('status' in firestore.get(/databases/(default)/documents/devreGroups/$(groupId)/members/$(request.auth.uid)).data)
-          || firestore.get(/databases/(default)/documents/devreGroups/$(groupId)/members/$(request.auth.uid)).data.status == 'active'
-        );
+        && firestore.get(/databases/(default)/documents/devreGroups/$(groupId)/members/$(request.auth.uid)).data.status == 'active';
     }
 
     function isDirectParticipant(conversationId) {

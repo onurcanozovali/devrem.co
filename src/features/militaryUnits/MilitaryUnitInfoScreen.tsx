@@ -61,6 +61,13 @@ function mapTarget(unit: CanonicalMilitaryUnit): string {
     ?? [unit.name, unit.district, unit.cityName].filter(Boolean).join(', ');
 }
 
+export function mapCoordinateLabel(unit: Pick<CanonicalMilitaryUnit, 'coordinateStatus' | 'mapCoordinates'>): string {
+  if (!unit.mapCoordinates) return 'Birlik adına göre haritada aranır';
+  return unit.coordinateStatus === 'verified_public_navigation_point'
+    ? 'Kamu kaynağında doğrulanmış navigasyon noktası'
+    : 'Kamuya açık kaynaklardan yaklaşık konum';
+}
+
 function openMap(unit: CanonicalMilitaryUnit, directions: boolean, onError: () => void): void {
   const target = encodeURIComponent(mapTarget(unit));
   const url = directions
@@ -125,7 +132,7 @@ export function MilitaryUnitInfoScreen() {
           <View style={{ flex: 1, gap: 3 }}>
             <AppText weight="800">{locationLabel}</AppText>
             <AppText color="muted" variant="caption">
-              {unit.mapCoordinates ? 'Doğrulanmış navigasyon noktası' : 'Birlik adına göre haritada aranır'}
+              {mapCoordinateLabel(unit)}
             </AppText>
           </View>
         </View>
@@ -191,6 +198,11 @@ export function MilitaryUnitInfoScreen() {
         </Pressable>)}
       </View>
     </Section> : null}
+    <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radii.md, padding: spacing.md }}>
+      <AppText color="muted" variant="caption" style={{ lineHeight: 19 }}>
+        Devrem, MSB/TSK veya başka bir kamu kurumunun resmî hizmeti değildir. Konum ve birlik bilgileri yardımcı niteliktedir; sevk belgen ve resmî kaynaklardaki bilgiler esastır.
+      </AppText>
+    </View>
     <DevremNoticeModal description={notice?.description ?? ''} onClose={() => setNotice(null)} title={notice?.title ?? ''} visible={notice !== null} />
   </ScreenContainer>;
 }

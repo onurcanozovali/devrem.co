@@ -1,9 +1,7 @@
 import {
   Timestamp,
   collection,
-  doc,
   documentId,
-  getDoc,
   getDocs,
   getFirestore,
   limit,
@@ -12,7 +10,9 @@ import {
   startAfter,
   where,
 } from '@react-native-firebase/firestore';
+import { getAuth, getIdToken } from '@react-native-firebase/auth';
 
+import { getAppConfig } from '@/config/env';
 import { parsePublicProfileData } from '@/features/matching/services/discoveryDomain';
 import {
   DISCOVERY_PAGE_SIZE,
@@ -64,7 +64,7 @@ export async function fetchPublicProfilesPage(
     where('militaryType', '==', reference.militaryType),
     ...(reference.militaryUnitId
       ? [where('militaryUnitId', '==', reference.militaryUnitId)]
-      : []),
+      : [where('militaryUnitName', '==', reference.militaryUnitName)]),
     orderBy(documentId()),
     ...(pageRequest.cursor ? [startAfter(pageRequest.cursor)] : []),
     limit(pageRequest.limit),
@@ -81,16 +81,31 @@ export async function fetchPublicProfilesPage(
   };
 }
 
+function profileEndpoint(): string {
+  return `https://europe-west1-${getAppConfig().firebase.projectId}.cloudfunctions.net/getPublicProfileEndpoint`;
+}
+
 export async function fetchPublicProfile(userId: string): Promise<PublicProfile | null> {
   if (!userId) return null;
   const cached = publicProfileCache.get(userId);
   if (cached && cached.expiresAt > Date.now()) return cached.profile;
-  const database = getFirestore(getFirebaseApp());
-  const snapshot = await getDoc(doc(database, 'publicProfiles', userId));
-  if (!snapshot.exists()) {
+  const user = getAuth(getFirebaseApp()).currentUser;
+  if (!user) throw new Error('unauthenticated');
+  const response = await fetch(profileEndpoint(), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await getIdToken(user)}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uid: userId }),
+  });
+  if (response.status === 404) {
     publicProfileCache.delete(userId);
     return null;
   }
-  const profile = parsePublicProfileSnapshot(snapshot.id, snapshot.data());
+  const value = await response.json() as { code?: string; profile?: Record<string, unknown> };
+  if (!response.ok || !value.profile) throw new Error(value.code ?? 'profile-fetch-failed');
+  const rawUpdatedAt = value.profile.updatedAt;
+  const profile = parsePublicProfileData(userId, {
+    ...value.profile,
+    updatedAt: typeof rawUpdatedAt === 'string' ? new Date(rawUpdatedAt) : null,
+  });
   return profile ? rememberPublicProfile(profile) : null;
 }

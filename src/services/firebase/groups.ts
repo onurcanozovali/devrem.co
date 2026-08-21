@@ -127,12 +127,12 @@ async function fetchGroup(groupId: string): Promise<DevreGroup | null> {
     getDocs(query(collection(database, 'devreGroups', groupId, 'members'), limit(groupMemberPageSize))),
   ]);
   if (!groupSnapshot.exists()) return null;
-  const membershipStatusByUid = Object.fromEntries(membersSnapshot.docs.map((memberSnapshot) => [
-    memberSnapshot.id,
-    memberSnapshot.get('status') === 'left' ? 'left' : 'active',
-  ])) as Record<string, 'active' | 'left'>;
+  const membershipStatusByUid = Object.fromEntries(membersSnapshot.docs.flatMap((memberSnapshot) => {
+    const status = memberSnapshot.get('status');
+    return status === 'active' || status === 'left' ? [[memberSnapshot.id, status]] : [];
+  })) as Record<string, 'active' | 'left'>;
   const publicProfiles: PublicProfile[] = [];
-  const memberIds = membersSnapshot.docs.map((memberSnapshot) => memberSnapshot.id);
+  const memberIds = Object.keys(membershipStatusByUid);
   for (let index = 0; index < memberIds.length; index += publicProfileBatchSize) {
     const ids = memberIds.slice(index, index + publicProfileBatchSize);
     if (!ids.length) continue;

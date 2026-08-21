@@ -10,7 +10,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 type ReportReason = typeof directReportReasons[number];
 
 export function DevremReportSheet({ onBlockRequested, onClose, onSubmit, title = 'Kullanıcıyı bildir', visible }: {
-  onBlockRequested: () => void;
+  onBlockRequested?: () => void;
   onClose: () => void;
   onSubmit: (reason: ReportReason) => Promise<void>;
   title?: string;
@@ -38,7 +38,7 @@ export function DevremReportSheet({ onBlockRequested, onClose, onSubmit, title =
         <View style={{ alignSelf: 'center', backgroundColor: colors.border, borderRadius: 2, height: 4, width: 42 }} />
         {status === 'success' ? <>
           <View style={{ alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md }}><View style={{ alignItems: 'center', backgroundColor: colors.primarySubtle, borderRadius: 30, height: 60, justifyContent: 'center', width: 60 }}><Ionicons color={colors.primary} name="checkmark" size={30} /></View><AppText variant="subtitle" weight="900">Bildirimin alındı</AppText><AppText color="muted" style={{ textAlign: 'center' }}>Geri bildirimin için teşekkürler.{`\n`}Gerekli incelemeyi yapacağız.</AppText></View>
-          <Pressable onPress={() => { reset(); onBlockRequested(); }} style={{ alignItems: 'center', borderColor: colors.danger, borderRadius: radii.md, borderWidth: 1, justifyContent: 'center', minHeight: 50 }}><AppText color="danger" weight="800">Kullanıcıyı engelle</AppText></Pressable>
+          {onBlockRequested ? <Pressable onPress={() => { reset(); onBlockRequested(); }} style={{ alignItems: 'center', borderColor: colors.danger, borderRadius: radii.md, borderWidth: 1, justifyContent: 'center', minHeight: 50 }}><AppText color="danger" weight="800">Kullanıcıyı engelle</AppText></Pressable> : null}
           <Pressable onPress={close} style={{ alignItems: 'center', backgroundColor: colors.primary, borderRadius: radii.md, justifyContent: 'center', minHeight: 50 }}><AppText weight="800" style={{ color: colors.textInverse }}>Tamam</AppText></Pressable>
         </> : <>
           <View><AppText variant="subtitle" weight="900">{title}</AppText><AppText color="muted" variant="caption">Bildirim nedenini seç.</AppText></View>

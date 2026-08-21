@@ -18,6 +18,7 @@ import {
   createDocumentMessageDraft, createImageMessageDraft, deleteGroupMessageForEveryone,
   fetchHiddenGroupMessageIds, fetchOlderDevreChatMessages, hideGroupMessageForUser,
   markDevreGroupRead, sendDevreChatMessage, subscribeToGroupReadCursors,
+  reportGroupMessage,
   subscribeToRecentDevreChatMessages, type DevreChatCursor,
   subscribeToRecentGroupEvents,
   type DevreGroupReadCursor,
@@ -41,6 +42,7 @@ import { prepareChatImage, selectChatPhoto, type SelectedChatImage } from './cha
 import type { DevreGroup } from './types/groups';
 import { uploadAndSendDevreChatMediaMessage } from './services/sendChatMedia';
 import { useChatKeyboardOffset } from './useChatKeyboardOffset';
+import { DevremReportSheet } from '@/features/directMessages/DevremReportSheet';
 
 function messageTime(message: DevreChatMessage): string {
   return (message.createdAt ?? message.clientCreatedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -218,6 +220,7 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
   const [previewSending, setPreviewSending] = useState(false);
   const [viewerImage, setViewerImage] = useState<ChatViewerImage | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<DevreChatMessage | null>(null);
+  const [reportTarget, setReportTarget] = useState<DevreChatMessage | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<DevreChatMessage | null>(null);
   const [infoMessage, setInfoMessage] = useState<DevreChatMessage | null>(null);
   const [replyingTo, setReplyingTo] = useState<DevreChatMessage | null>(null);
@@ -358,6 +361,7 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
       ...(selectedMessage.type === 'text' && !selectedMessage.deletedForEveryone ? [{ icon: 'copy-outline' as const, label: 'Kopyala', onPress: () => void Clipboard.setStringAsync(selectedMessage.text) }] : []),
       { icon: 'return-up-back-outline' as const, label: 'Yanıtla', onPress: () => replyToMessage(selectedMessage) },
       { icon: 'eye-off-outline' as const, label: 'Benden Sil', onPress: () => hideSelected(selectedMessage) },
+      ...(!own && selectedMessage.status === 'sent' ? [{ destructive: true, icon: 'flag-outline' as const, label: 'Bildir', onPress: () => { setReportTarget(selectedMessage); setSelectedMessage(null); } }] : []),
       ...(own && selectedMessage.status === 'sent' && !selectedMessage.deletedForEveryone ? [{ destructive: true, icon: 'trash-outline' as const, label: 'Herkesten Sil', onPress: () => setDeleteConfirmation(selectedMessage) }] : []),
     ];
   })();
@@ -427,6 +431,15 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
     {chatRuntime}
     <ChatBottomSheet actions={attachmentActions} onClose={() => setAttachmentOpen(false)} title="Ekle" visible={attachmentOpen} />
     <ChatBottomSheet actions={messageActions} onClose={() => setSelectedMessage(null)} visible={Boolean(selectedMessage)} />
+    <DevremReportSheet
+      onClose={() => setReportTarget(null)}
+      onSubmit={async (reason) => {
+        if (!reportTarget) return;
+        await reportGroupMessage({ groupId: group.groupId, messageId: reportTarget.id, reason, reportedUid: reportTarget.senderUid, reporterUid: userId });
+      }}
+      title="Mesajı bildir"
+      visible={Boolean(reportTarget)}
+    />
     <ChatBottomSheet actions={deleteConfirmation ? [{ destructive: true, icon: 'trash-outline', label: 'Herkes için sil', onPress: () => { deleteForEveryone(deleteConfirmation); setDeleteConfirmation(null); } }] : []} onClose={() => setDeleteConfirmation(null)} title="Bu mesaj herkesten silinsin mi?" visible={Boolean(deleteConfirmation)} />
     <ChatCameraModal onClose={() => setCameraOpen(false)} onPhoto={(photo) => { setCameraOpen(false); setPreview(photo); }} visible={cameraOpen} />
     <PhotoPreview caption={caption} image={preview} onCaption={setCaption} onClose={() => { setPreview(null); setCaption(''); }} onSend={() => void sendImage()} sending={previewSending} />

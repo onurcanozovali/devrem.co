@@ -74,12 +74,14 @@ export function useDiscovery(profile: UserProfile) {
     militaryPeriodYear: profile.militaryPeriodYear,
     militaryType: profile.militaryType,
     militaryUnitId: profile.militaryUnitId,
+    militaryUnitName: profile.militaryUnitNameSnapshot,
   }), [
     profile.militaryCity,
     profile.militaryPeriodMonth,
     profile.militaryPeriodYear,
     profile.militaryType,
     profile.militaryUnitId,
+    profile.militaryUnitNameSnapshot,
   ]);
   const queryKey = useMemo(() => getDiscoveryQueryKey(discoveryQuery), [discoveryQuery]);
   const initialCache = useMemo(() => getCachedDiscoveryPages(queryKey), [queryKey]);

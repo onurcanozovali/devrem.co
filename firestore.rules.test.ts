@@ -42,7 +42,7 @@ function profileData(uid: string, year: number, month: number) {
     militaryType: 'standard',
     militaryPeriodYear: year,
     militaryPeriodMonth: month,
-    militaryUnit: null,
+    militaryUnit: '1. Piyade Tugayı',
     reportingDate: `${year}-${String(month).padStart(2, '0')}-10`,
     onboardingCompleted: true,
     createdAt: Timestamp.fromDate(new Date('2025-01-01T00:00:00Z')),
@@ -66,7 +66,7 @@ async function seedPublicProfile(uid: string, year: number, month: number) {
       militaryType: 'standard',
       militaryPeriodYear: year,
       militaryPeriodMonth: month,
-      militaryUnit: null,
+      militaryUnitName: '1. Piyade Tugayı',
       photoPath: null,
       updatedAt: Timestamp.fromDate(new Date('2026-08-09T00:00:00Z')),
     });
@@ -91,6 +91,7 @@ async function seedDevreGroup(groupId: string, memberIds: string[]) {
     for (const uid of memberIds) {
       await setDoc(doc(database, 'devreGroups', groupId, 'members', uid), {
         uid,
+        status: 'active',
         source: 'backfill',
         schemaVersion: 1,
         joinedAt: Timestamp.now(),
@@ -176,8 +177,9 @@ test('owner may set only their deterministic optional profile photo path', async
   }));
 });
 
-test('authenticated users may browse public projections but unauthenticated users cannot', async () => {
+test('only exact Devre discovery queries may browse public projections', async () => {
   await environment.clearFirestore();
+  await seedProfile('user-2', 2027, 2);
   await seedPublicProfile('user-1', 2027, 2);
   const authenticatedDatabase = environment.authenticatedContext('user-2').firestore();
   await assertSucceeds(getDoc(doc(authenticatedDatabase, 'publicProfiles', 'user-1')));
@@ -186,11 +188,32 @@ test('authenticated users may browse public projections but unauthenticated user
     where('militaryPeriodYear', '==', 2027),
     where('militaryPeriodMonth', '==', 2),
     where('militaryCity', '==', 6),
+    where('militaryType', '==', 'standard'),
+    where('militaryUnitName', '==', '1. Piyade Tugayı'),
   )));
   assert.equal(results.size, 1);
 
+  await seedProfile('user-3', 2027, 3);
+  const arbitraryDatabase = environment.authenticatedContext('user-3').firestore();
+  await assertFails(getDoc(doc(arbitraryDatabase, 'publicProfiles', 'user-1')));
+  await assertFails(getDocs(collection(arbitraryDatabase, 'publicProfiles')));
+
   const unauthenticatedDatabase = environment.unauthenticatedContext().firestore();
   await assertFails(getDocs(collection(unauthenticatedDatabase, 'publicProfiles')));
+});
+
+test('active group members may read member profiles but missing membership status grants no access', async () => {
+  await environment.clearFirestore();
+  const groupId = `devre-v1-${'e'.repeat(64)}`;
+  await seedPublicProfile('user-2', 2027, 2);
+  await seedDevreGroup(groupId, ['user-1', 'user-2']);
+  await assertSucceeds(getDoc(doc(environment.authenticatedContext('user-1').firestore(), 'publicProfiles', 'user-2')));
+  await environment.withSecurityRulesDisabled(async (context) => updateDoc(
+    doc(context.firestore(), 'devreGroups', groupId, 'members', 'user-1'),
+    { status: null },
+  ));
+  await assertFails(getDoc(doc(environment.authenticatedContext('user-1').firestore(), 'devreGroups', groupId)));
+  await assertFails(getDoc(doc(environment.authenticatedContext('user-1').firestore(), 'publicProfiles', 'user-2')));
 });
 
 test('clients cannot spoof, update, or delete public projections', async () => {
@@ -537,6 +560,14 @@ test('group messages are member-only, immutable, bounded, and sender-authenticat
     createdAt: serverTimestamp(),
     clientCreatedAt: Timestamp.now(),
     schemaVersion: 3,
+  }));
+  await assertSucceeds(setDoc(doc(environment.authenticatedContext('user-2').firestore(), 'moderationReports', 'group-report-1'), {
+    reporterUid: 'user-2', reportedUid: 'user-1', conversationType: 'group', conversationId: groupId,
+    messageId: 'message-1', reason: 'Uygunsuz içerik', status: 'open', createdAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(environment.authenticatedContext('user-3').firestore(), 'moderationReports', 'group-report-2'), {
+    reporterUid: 'user-3', reportedUid: 'user-1', conversationType: 'group', conversationId: groupId,
+    messageId: 'message-1', reason: 'Uygunsuz içerik', status: 'open', createdAt: serverTimestamp(),
   }));
   await assertSucceeds(setDoc(doc(memberDatabase, 'devreGroups', groupId, 'messages', 'reply-1'), {
     id: 'reply-1', senderUid: 'user-1', type: 'text', text: 'Yanıt',

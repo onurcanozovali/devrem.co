@@ -54,7 +54,7 @@ beforeEach(async () => {
   await environment.clearFirestore();
   await environment.withSecurityRulesDisabled(async (context) => {
     for (const uid of ['user-1', 'user-2']) {
-      await setDoc(doc(context.firestore(), 'devreGroups', groupId, 'members', uid), { uid });
+      await setDoc(doc(context.firestore(), 'devreGroups', groupId, 'members', uid), { uid, status: 'active' });
     }
     await setDoc(doc(context.firestore(), 'directConversations', directConversationId), {
       conversationId: directConversationId, participantUids: ['user-1', 'user-2'], type: 'direct',
@@ -138,6 +138,18 @@ test('departed members cannot read or write historical group media', async () =>
     departedImage,
     new Uint8Array([4]),
     { ...chatImageMetadata, customMetadata: { ...chatImageMetadata.customMetadata, senderUid: 'user-2' } },
+  ));
+});
+
+test('membership documents without explicit active status grant no media access', async () => {
+  await environment.withSecurityRulesDisabled(async (context) => setDoc(
+    doc(context.firestore(), 'devreGroups', groupId, 'members', 'user-1'),
+    { uid: 'user-1' },
+  ));
+  await assertFails(uploadBytes(
+    ref(environment.authenticatedContext('user-1').storage(), chatImagePath),
+    new Uint8Array([1]),
+    chatImageMetadata,
   ));
 });
 

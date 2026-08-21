@@ -1,5 +1,6 @@
 import {
   Timestamp,
+  addDoc,
   collection,
   doc,
   documentId,
@@ -223,6 +224,26 @@ export async function fetchRecentGroupDocuments(groupId: string, count = 4): Pro
 export async function hideGroupMessageForUser(uid: string, groupId: string, messageId: string): Promise<void> {
   await setDoc(doc(getFirestore(getFirebaseApp()), 'users', uid, 'hiddenGroupMessages', groupId, 'messages', messageId), {
     groupId, messageId, hiddenAt: serverTimestamp(),
+  });
+}
+
+export const groupReportReasons = ['Spam', 'Taciz / rahatsız etme', 'Uygunsuz içerik', 'Sahte / yanıltıcı profil', 'Diğer'] as const;
+export async function reportGroupMessage(input: {
+  groupId: string;
+  messageId: string;
+  reason: typeof groupReportReasons[number];
+  reportedUid: string;
+  reporterUid: string;
+}): Promise<void> {
+  await addDoc(collection(getFirestore(getFirebaseApp()), 'moderationReports'), {
+    reporterUid: input.reporterUid,
+    reportedUid: input.reportedUid,
+    conversationType: 'group',
+    conversationId: input.groupId,
+    messageId: input.messageId,
+    reason: input.reason,
+    status: 'open',
+    createdAt: serverTimestamp(),
   });
 }
 

@@ -43,6 +43,7 @@ export {
   fetchRecentGroupDocuments,
   hideGroupMessageForUser,
   markDevreGroupRead,
+  reportGroupMessage,
   subscribeToGroupReadCursors,
   subscribeToGroupUnreadCount,
   subscribeToRecentGroupEvents,
