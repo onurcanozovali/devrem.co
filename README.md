@@ -328,9 +328,11 @@ membership, delivery, dedup ve rate-limit koleksiyonlarına dokunulmaz; temizlen
 ## Phase 4C: Devre grupları
 
 Her exact Devre kimliği `@devrem/devre-domain` tarafından tek bir canonical identity key'e dönüştürülür.
-Backend bu anahtarın SHA-256 özetiyle `devre-v1-<hash>` biçiminde deterministik grup ID'si üretir.
-İkamet ve hareket şehirleri grup kimliğine dahil değildir. Stable `militaryUnitId` varsa birlik adı yerine o
-kullanılır; mevcut veride ID yoksa normalize edilmiş birlik adı geçici fallback'tir.
+Backend bu anahtarın SHA-256 özetiyle `devre-v1-<hash>` biçiminde deterministik ana grup ID'si üretir.
+Canonical Devre kuralı değişmez. Ayrıca aynı exact Devre içinden aynı yola çıkış şehrini paylaşan kullanıcılar için
+`travel-v1-<hash>` biçiminde ayrı bir Yol Arkadaşları grubu oluşturulur. İkamet şehri iki grup kimliğine de girmez;
+yola çıkış şehri yalnızca daha dar Yol Arkadaşları kimliğine eklenir. Stable `militaryUnitId` varsa birlik adı yerine
+o kullanılır; mevcut veride ID yoksa normalize edilmiş birlik adı geçici fallback'tir.
 
 Firestore modeli:
 
@@ -338,12 +340,12 @@ Firestore modeli:
 devreGroups/{groupId}
 devreGroups/{groupId}/members/{uid}
 _devreGroupMemberships/{uid}                 # owner-readable trusted pointer
-users/{uid}/devreGroupState/main             # one-time bilgi durumu
+_travelGroupMemberships/{uid}                # owner-readable trusted travel pointer
 users/{uid}/communicationPreferences/main    # allowDirectMessages
 ```
 
-`syncPublicProfile` aynı retry-safe akışta grup ve üyeliği ensure eder. Canonical kimlik değişirse eski
-membership silinir ve yenisi oluşturulur; profil exact kimliğini kaybederse membership kaldırılır. Üye sayacı
+`syncPublicProfile` aynı retry-safe akışta iki grup ve üyeliği ensure eder. Canonical kimlik veya yola çıkış şehri
+değişirse ilgili eski membership silinir ve yenisi oluşturulur; profil exact kimliğini kaybederse membership kaldırılır. Üye sayacı
 tutulmaz. Boş deterministic gruplar audit/reconciliation kolaylığı için korunur. Client grup veya membership
 yazamaz ve yalnızca gerçekten üyesi olduğu grubun metadata/member belgelerini okuyabilir.
 
@@ -451,11 +453,10 @@ pnpm dlx eas-cli@latest build --profile development --platform ios
 
 ### Phase 4D production UX modeli
 
-`Devre Grubum` tanıtım onayı `acknowledgedGroupId` ile grup kimliğine bağlıdır. Kullanıcı ilk girişte tanıtımı
-görür; aynı gruba sonraki tab girişlerinde doğrudan tam ekran sohbete gider ve tanıtım kartı tekrar gösterilmez.
-Canonical Devre değişirse yeni grup ayrı bir ilk giriş olarak değerlendirilir. Grup sonucu tab ve chat route'u
-arasında paylaşılan session cache ile yeniden kullanılır; böylece peş peşe loading ekranları oluşmaz. Sohbet kök
-Stack rotasıdır ve güvenli allow-list içindeki önceki sekmeye döner; cold-start için ana sekmeye düşer.
+Gruplarım sekmesi ana Devre Grubu ile daha dar Yol Arkadaşları grubunu sürekli iki ayrı kart olarak gösterir.
+Membership pointer'ları realtime dinlenir; profil kimliği değiştiğinde eski grup UI'dan hemen düşer ve trusted
+Function yeni grupları yazınca ekran otomatik yenilenir. Karttan açılan sohbet kök Stack rotasıdır ve geri işlemi
+Gruplarım listesine döner. Chat ve grup bilgi rotaları her iki aktif membership'i yeniden doğrular.
 
 Yeni mesajlar `schemaVersion: 4` kullanır ve nullable `replyToMessageId` ile aynı gruptaki mevcut bir mesaja
 güvenli yanıt verebilir. Firestore Rules olmayan bir mesaja veya mesajın kendisine yanıtı reddeder. Eski v2/v3
@@ -502,8 +503,9 @@ Fotoğraf alanı mesajdaki en/boy metadata'sıyla indirme öncesinde ayrılır. 
 `react-native-gesture-handler` ve Reanimated ile pinch-to-zoom, odak merkezli büyütme, zoom sırasında pan,
 çift dokunmayla 2x/sıfırlama ve Android hardware-back kapatma sağlar.
 
-Uygulama ikonu, adaptive icon ve native splash `assets/branding` altındadır. Splash, koyu Devrem yeşili üzerinde
-şeffaf logoyu gösterir ve kısa bir fade ile kapanır; GIF/MP4 native splash olarak kullanılmaz.
+Uygulama ikonu, adaptive icon ve native splash `assets/branding` altındadır. İkon, onaylı logonun yıldızlı
+askerî amblemini kullanır. Splash yalnızca koyu tema zemini (`#101613`) üzerinde tam Devrem logosunu gösterir;
+GIF/MP4 native splash olarak kullanılmaz. Türev dosyalar `scripts/generate-branding-assets.ps1` ile yeniden üretilir.
 
 ### Android uygulamalarından Devrem'e paylaşım
 
@@ -544,6 +546,61 @@ pnpm dlx eas-cli@latest build --profile development --platform android
 ```
 
 Bu özellik Firebase Rules veya Functions değiştirmez; inbound paylaşım için Firebase deploy gerekmez.
+
+## Canonical askerî birlik kataloğu
+
+`src/data/militaryUnits.v4.json`, onboarding, profil, Devre kimliği ve kuvvet markalaması için tek katalog
+kaynağıdır. Uygulama yalnız katalogdaki doğrulanmış/gösterilebilir alanları sunar; `researchCandidate` koordinatları
+haritada kullanılmaz. Eski serbest metin birlikler geriye uyumlu kalır.
+
+Mevcut profilleri yalnız aynı askerî şehir içindeki birebir ad, kısa ad veya alias eşleşmesiyle hazırlayan araç
+varsayılan olarak dry-run çalışır. Belirsiz, eksik ve eşleşmeyen kayıtlar atlanır; `--apply` açıkça verilmeden yazma
+yapmaz. Apply sırasında profil ile `_notificationMemberships/{uid}` canonical fingerprint'i aynı transaction içinde
+güncellenir; bu teknik migration yeni katılım sayılmaz, keşif bildirimi/rate-limit/delivery kaydı üretmez:
+
+```powershell
+$env:GCLOUD_PROJECT = 'devrem-d985b'
+pnpm backfill:military-units
+pnpm backfill:military-units -- --apply
+```
+
+Apply işleminden önce yeni profil şemasını kabul eden Rules ile güncel `syncPublicProfile` Function deploy edilmiş
+olmalıdır. Function mevcut retry politikası nedeniyle deploy onayı için `--force` ister:
+
+```powershell
+pnpm exec firebase deploy --only firestore:rules,firestore:indexes,functions:syncPublicProfile --project devrem-d985b --force
+```
+
+## Direct Messages ve grup yetkilendirme rollout'u
+
+DM konuşmaları yalnız server endpoint'i tarafından deterministic iki-kullanıcı kimliğiyle oluşturulur. Firestore ve
+Storage erişimi iki katılımcıyla sınırlıdır; iki yöndeki blok ilişkisi yeni mesaj ve medya yazımını durdurur. Inbox,
+mesaj geçmişlerini dinlemek yerine konuşma/grup üst belgelerindeki son-mesaj metadata'sını ve owner-private unread
+durumunu kullanır.
+
+Üretim üyeliklerine yazmadan önce salt okunur audit:
+
+```powershell
+$env:GCLOUD_PROJECT = 'devrem-d985b'
+pnpm audit:devre-memberships
+```
+
+İnceleme ve fiziksel test onayından sonra gereken backend deploy (otomatik çalıştırılmaz):
+
+```powershell
+pnpm exec firebase deploy --only firestore:rules,firestore:indexes,storage,functions:syncPublicProfile,functions:notifyDevreGroupMessage,functions:notifyDirectMessage,functions:getOrCreateDirectConversationEndpoint,functions:cleanupDeletedDevreGroupMessageMedia,functions:cleanupDeletedDirectMessageMedia,functions:deleteAccount --project devrem-d985b --force
+```
+
+Mevcut legacy membership belgelerini `status: active` şemasına geçirmek için önce tekrar dry-run alın, sonucu
+inceleyin; yalnız açık onaydan sonra korumalı backfill çalıştırın:
+
+```powershell
+$env:GCLOUD_PROJECT = 'devrem-d985b'
+$env:DEVREM_GROUP_BACKFILL_CONFIRM = 'devrem-d985b'
+pnpm backfill:devre-groups
+```
+
+Bu faz yeni native dependency/config içermez; yalnız bu değişiklikler için yeni EAS build gerekmez.
 
 ## Tema ve UI kuralları
 

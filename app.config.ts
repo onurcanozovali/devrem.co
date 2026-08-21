@@ -1,4 +1,12 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+import legalEntity from './src/features/legal/legalEntity.json';
+
+if (
+  process.env.EXPO_PUBLIC_APP_ENV === 'production'
+  && Object.values(legalEntity).some((value) => value === 'FILL_BEFORE_PRODUCTION')
+) {
+  throw new Error('Production legal entity configuration is incomplete. Fill src/features/legal/legalEntity.json before release.');
+}
 
 function includeString(values: string[] | undefined, value: string): string[] {
   return values?.includes(value) ? values : [...(values ?? []), value];

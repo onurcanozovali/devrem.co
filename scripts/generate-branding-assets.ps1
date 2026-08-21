@@ -4,13 +4,10 @@ Add-Type -AssemblyName System.Drawing
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $brandingDirectory = Join-Path $projectRoot 'assets\branding'
-$appConfigPath = Join-Path $projectRoot 'app.json'
-$sourceIconPath = Join-Path $brandingDirectory 'icon.png'
-$sourceMarkPath = Join-Path $brandingDirectory 'splash-icon.png'
+$sourceLogoPath = Join-Path $brandingDirectory 'logo.png'
 $legacyOutputPath = Join-Path $brandingDirectory 'icon-padded.png'
 $adaptiveOutputPath = Join-Path $brandingDirectory 'adaptive-icon-foreground-padded.png'
 $splashOutputPath = Join-Path $brandingDirectory 'splash-brand-lockup.png'
-$version = (Get-Content -LiteralPath $appConfigPath -Raw | ConvertFrom-Json).expo.version
 
 function Set-HighQualityDrawing([System.Drawing.Graphics]$graphics) {
   $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
@@ -24,65 +21,66 @@ function Save-Png([System.Drawing.Bitmap]$bitmap, [string]$path) {
   $bitmap.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
 }
 
-$brandBackground = [System.Drawing.ColorTranslator]::FromHtml('#006440')
-$brandGreen = [System.Drawing.ColorTranslator]::FromHtml('#00F5A0')
-$secondaryText = [System.Drawing.ColorTranslator]::FromHtml('#D7F5E8')
-$mutedText = [System.Drawing.ColorTranslator]::FromHtml('#A8D8C5')
+function Draw-SourceRect(
+  [System.Drawing.Graphics]$graphics,
+  [System.Drawing.Image]$source,
+  [System.Drawing.Rectangle]$destination,
+  [System.Drawing.Rectangle]$sourceRectangle
+) {
+  $graphics.DrawImage(
+    $source,
+    $destination,
+    $sourceRectangle.X,
+    $sourceRectangle.Y,
+    $sourceRectangle.Width,
+    $sourceRectangle.Height,
+    [System.Drawing.GraphicsUnit]::Pixel
+  )
+}
 
-$sourceIcon = [System.Drawing.Image]::FromFile($sourceIconPath)
+$darkBackground = [System.Drawing.ColorTranslator]::FromHtml('#101613')
+$sourceLogo = [System.Drawing.Image]::FromFile($sourceLogoPath)
+
+if ($sourceLogo.Width -ne 3000 -or $sourceLogo.Height -ne 3000) {
+  $sourceLogo.Dispose()
+  throw 'assets/branding/logo.png must remain the approved 3000x3000 source asset.'
+}
+
+# The app icon uses the logo's own star-and-chevron emblem. A full horizontal
+# wordmark becomes illegible at launcher-icon sizes.
+$emblemSource = New-Object System.Drawing.Rectangle 980, 1080, 600, 720
+$emblemDestination = New-Object System.Drawing.Rectangle 242, 188, 540, 648
+
 $legacyIcon = New-Object System.Drawing.Bitmap 1024, 1024, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $legacyGraphics = [System.Drawing.Graphics]::FromImage($legacyIcon)
 Set-HighQualityDrawing $legacyGraphics
-$legacyGraphics.Clear($brandBackground)
-$legacyGraphics.DrawImage($sourceIcon, 92, 92, 840, 840)
+$legacyGraphics.Clear($darkBackground)
+Draw-SourceRect $legacyGraphics $sourceLogo $emblemDestination $emblemSource
 Save-Png $legacyIcon $legacyOutputPath
 $legacyGraphics.Dispose()
 $legacyIcon.Dispose()
-$sourceIcon.Dispose()
 
-$sourceMark = [System.Drawing.Image]::FromFile($sourceMarkPath)
 $adaptiveIcon = New-Object System.Drawing.Bitmap 1024, 1024, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $adaptiveGraphics = [System.Drawing.Graphics]::FromImage($adaptiveIcon)
 Set-HighQualityDrawing $adaptiveGraphics
 $adaptiveGraphics.Clear([System.Drawing.Color]::Transparent)
-$adaptiveGraphics.DrawImage($sourceMark, 92, 92, 840, 840)
+Draw-SourceRect $adaptiveGraphics $sourceLogo $emblemDestination $emblemSource
 Save-Png $adaptiveIcon $adaptiveOutputPath
 $adaptiveGraphics.Dispose()
 $adaptiveIcon.Dispose()
 
-$splash = New-Object System.Drawing.Bitmap 1080, 1920, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-$splashGraphics = [System.Drawing.Graphics]::FromImage($splash)
+# Native splash screens provide the dark background. This transparent asset is
+# only the approved wordmark, tightly cropped with a small safety margin.
+$wordmarkSource = New-Object System.Drawing.Rectangle 164, 1130, 2653, 606
+$splashLogo = New-Object System.Drawing.Bitmap 2733, 686, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+$splashGraphics = [System.Drawing.Graphics]::FromImage($splashLogo)
 Set-HighQualityDrawing $splashGraphics
 $splashGraphics.Clear([System.Drawing.Color]::Transparent)
-$splashGraphics.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
-$splashGraphics.DrawImage($sourceMark, 160, 580, 760, 760)
-
-$centeredText = New-Object System.Drawing.StringFormat
-$centeredText.Alignment = [System.Drawing.StringAlignment]::Center
-$centeredText.LineAlignment = [System.Drawing.StringAlignment]::Center
-$sloganFont = New-Object System.Drawing.Font 'Segoe UI', 64, ([System.Drawing.FontStyle]::Bold), ([System.Drawing.GraphicsUnit]::Pixel)
-$domainFont = New-Object System.Drawing.Font 'Segoe UI', 46, ([System.Drawing.FontStyle]::Regular), ([System.Drawing.GraphicsUnit]::Pixel)
-$versionFont = New-Object System.Drawing.Font 'Segoe UI', 34, ([System.Drawing.FontStyle]::Regular), ([System.Drawing.GraphicsUnit]::Pixel)
-$brandBrush = New-Object System.Drawing.SolidBrush $brandGreen
-$secondaryBrush = New-Object System.Drawing.SolidBrush $secondaryText
-$mutedBrush = New-Object System.Drawing.SolidBrush $mutedText
-
-$slogan = "Askerlik yolunda yan$([char]0x0131)nda"
-$splashGraphics.DrawString($slogan, $sloganFont, $brandBrush, (New-Object System.Drawing.RectangleF 0, 1320, 1080, 100), $centeredText)
-$splashGraphics.DrawString('devrem.co', $domainFont, $secondaryBrush, (New-Object System.Drawing.RectangleF 0, 1435, 1080, 80), $centeredText)
-$splashGraphics.DrawString("v$version", $versionFont, $mutedBrush, (New-Object System.Drawing.RectangleF 0, 1760, 1080, 70), $centeredText)
-
-Save-Png $splash $splashOutputPath
-
-$mutedBrush.Dispose()
-$secondaryBrush.Dispose()
-$brandBrush.Dispose()
-$versionFont.Dispose()
-$domainFont.Dispose()
-$sloganFont.Dispose()
-$centeredText.Dispose()
+$wordmarkDestination = New-Object System.Drawing.Rectangle 40, 40, 2653, 606
+Draw-SourceRect $splashGraphics $sourceLogo $wordmarkDestination $wordmarkSource
+Save-Png $splashLogo $splashOutputPath
 $splashGraphics.Dispose()
-$splash.Dispose()
-$sourceMark.Dispose()
+$splashLogo.Dispose()
+$sourceLogo.Dispose()
 
-Write-Output "Branding assets generated for version $version."
+Write-Output 'Branding assets generated from assets/branding/logo.png.'
