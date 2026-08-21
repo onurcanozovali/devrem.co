@@ -10,7 +10,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { deleteObject, getBytes, ref, uploadBytes } from 'firebase/storage';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 const projectId = 'devrem-storage-rules-test';
 const avatarPath = 'users/user-1/profile/avatar.jpg';
@@ -34,6 +34,11 @@ const chatDocumentMetadata = {
     messageId: 'message-3', senderUid: 'user-1',
   },
 };
+const directConversationId = `direct-v1-${'d'.repeat(64)}`;
+const directImagePath = `directConversations/${directConversationId}/media/direct-image/image.jpg`;
+const directImageMetadata = { contentType: 'image/jpeg', customMetadata: { kind: 'image', messageId: 'direct-image', senderUid: 'user-1' } };
+const directDocumentPath = `directConversations/${directConversationId}/media/direct-document/document`;
+const directDocumentMetadata = { contentType: 'application/pdf', customMetadata: { extension: 'pdf', fileName: 'Belge.pdf', kind: 'document', messageId: 'direct-document', senderUid: 'user-1' } };
 let environment: RulesTestEnvironment;
 
 before(async () => {
@@ -51,6 +56,9 @@ beforeEach(async () => {
     for (const uid of ['user-1', 'user-2']) {
       await setDoc(doc(context.firestore(), 'devreGroups', groupId, 'members', uid), { uid });
     }
+    await setDoc(doc(context.firestore(), 'directConversations', directConversationId), {
+      conversationId: directConversationId, participantUids: ['user-1', 'user-2'], type: 'direct',
+    });
   });
 });
 
@@ -116,6 +124,23 @@ test('only active group members may upload and read private chat images', async 
   ));
 });
 
+test('departed members cannot read or write historical group media', async () => {
+  const ownerImage = ref(environment.authenticatedContext('user-1').storage(), chatImagePath);
+  await uploadBytes(ownerImage, new Uint8Array([1, 2, 3]), chatImageMetadata);
+  await environment.withSecurityRulesDisabled(async (context) => setDoc(
+    doc(context.firestore(), 'devreGroups', groupId, 'members', 'user-2'),
+    { status: 'left' },
+    { merge: true },
+  ));
+  const departedImage = ref(environment.authenticatedContext('user-2').storage(), chatImagePath);
+  await assertFails(getBytes(departedImage));
+  await assertFails(uploadBytes(
+    departedImage,
+    new Uint8Array([4]),
+    { ...chatImageMetadata, customMetadata: { ...chatImageMetadata.customMetadata, senderUid: 'user-2' } },
+  ));
+});
+
 test('chat media rejects spoofed metadata, video, arbitrary paths, and cross-user mutation', async () => {
   const owner = environment.authenticatedContext('user-1').storage();
   const ownerImage = ref(owner, chatImagePath);
@@ -164,5 +189,27 @@ test('documents are private, bounded, and restricted to approved MIME-extension 
   }));
   await assertFails(uploadBytes(ref(owner, `devreGroups/${groupId}/media/message-3/archive.zip`), new Uint8Array([1]), {
     contentType: 'application/zip',
+  }));
+});
+
+test('direct media is participant-only and validates sender plus document MIME metadata', async () => {
+  const first = environment.authenticatedContext('user-1').storage();
+  await assertSucceeds(uploadBytes(ref(first, directImagePath), new Uint8Array([1]), directImageMetadata));
+  await assertSucceeds(getBytes(ref(environment.authenticatedContext('user-2').storage(), directImagePath)));
+  await assertFails(getBytes(ref(environment.authenticatedContext('user-3').storage(), directImagePath)));
+  await assertFails(uploadBytes(ref(environment.authenticatedContext('user-2').storage(), directImagePath), new Uint8Array([2]), {
+    ...directImageMetadata, customMetadata: { ...directImageMetadata.customMetadata, senderUid: 'user-2' },
+  }));
+  await assertSucceeds(uploadBytes(ref(first, directDocumentPath), new Uint8Array([1]), directDocumentMetadata));
+  await assertFails(uploadBytes(ref(first, directDocumentPath), new Uint8Array([1]), { ...directDocumentMetadata, contentType: 'application/octet-stream' }));
+  await assertFails(uploadBytes(ref(first, directDocumentPath), new Uint8Array([1]), {
+    ...directDocumentMetadata, customMetadata: { ...directDocumentMetadata.customMetadata, extension: 'exe' },
+  }));
+  await environment.withSecurityRulesDisabled(async (context) => setDoc(
+    doc(context.firestore(), 'users', 'user-2', 'blockedUsers', 'user-1'),
+    { blockedUid: 'user-1', createdAt: serverTimestamp() },
+  ));
+  await assertFails(uploadBytes(ref(first, `directConversations/${directConversationId}/media/blocked/image.jpg`), new Uint8Array([1]), {
+    contentType: 'image/jpeg', customMetadata: { kind: 'image', messageId: 'blocked', senderUid: 'user-1' },
   }));
 });

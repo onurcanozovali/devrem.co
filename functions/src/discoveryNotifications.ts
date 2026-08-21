@@ -61,6 +61,7 @@ function parseNotificationProfile(userId: string, value: unknown): NotificationP
   return {
     userId,
     firstName: value.firstName,
+    lastName: typeof value.lastName === 'string' ? value.lastName : '',
     residenceCity: value.residenceCity,
     departureCity: value.departureCity,
     militaryCity: value.militaryCity,
@@ -69,6 +70,9 @@ function parseNotificationProfile(userId: string, value: unknown): NotificationP
     militaryType: value.militaryType as NotificationProfile['militaryType'],
     militaryUnitId,
     militaryUnitName,
+    forceCode: value.forceCode === 'land' || value.forceCode === 'air' || value.forceCode === 'navy' || value.forceCode === 'gendarmerie' || value.forceCode === 'coast_guard'
+      ? value.forceCode
+      : null,
     photoPath: value.photoPath,
   };
 }

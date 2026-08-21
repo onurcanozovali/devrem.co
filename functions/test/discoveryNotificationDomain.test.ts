@@ -28,6 +28,7 @@ function profile(overrides: Partial<NotificationProfile> = {}): NotificationProf
   return {
     userId: 'user-1',
     firstName: 'Ahmet',
+    lastName: 'Yılmaz',
     residenceCity: 55,
     departureCity: 6,
     militaryCity: 43,
@@ -182,4 +183,26 @@ test('notification copy contains no identifiers or private military metadata', (
     body: 'Ahmet de senin şehrinden.',
   });
   assert.equal(JSON.stringify(copy).includes('user-'), false);
+});
+
+test('a canonical backfill fingerprint baseline suppresses a migration join notification', () => {
+  const legacyFingerprint = getMembershipFingerprint(profile({ militaryUnitId: null }));
+  const canonicalFingerprint = getMembershipFingerprint(profile({ militaryUnitId: 'air-43-hava-er-egitim-tugay-komutanligi' }));
+  assert.ok(legacyFingerprint);
+  assert.ok(canonicalFingerprint);
+  const transition = decideMembershipTransition({
+    beforeFingerprint: legacyFingerprint,
+    nextFingerprint: canonicalFingerprint,
+    previousState: {
+      active: true,
+      fingerprint: canonicalFingerprint,
+      lastJoinEventId: null,
+      version: 2,
+    },
+    notificationsEnabled: true,
+    sourceEventId: 'migration-event',
+    source: 'live',
+  });
+  assert.equal(transition.shouldNotify, false);
+  assert.equal(transition.nextState.version, 2);
 });

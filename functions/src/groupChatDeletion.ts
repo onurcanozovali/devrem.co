@@ -35,3 +35,26 @@ export async function cleanupDeletedGroupMessageMedia(input: {
   await input.bucket.file(path).delete({ ignoreNotFound: true });
   logger.info('Deleted group message media cleaned up.', { groupId: input.groupId, messageId: input.messageId });
 }
+
+export function deletedDirectMessageMediaPath(
+  conversationId: string,
+  messageId: string,
+  before: unknown,
+  after: unknown,
+): string | null {
+  if (!isRecord(before) || !isRecord(after) || before.deletedForEveryone === true || after.deletedForEveryone !== true) return null;
+  if (typeof before.senderUid !== 'string' || after.senderUid !== before.senderUid || after.deletedBy !== before.senderUid) return null;
+  const fileName = before.type === 'image' ? 'image.jpg' : before.type === 'document' ? 'document' : null;
+  if (!fileName) return null;
+  const expected = `directConversations/${conversationId}/media/${messageId}/${fileName}`;
+  return before.mediaPath === expected && after.mediaPath === expected ? expected : null;
+}
+
+export async function cleanupDeletedDirectMessageMedia(input: {
+  after: unknown; before: unknown; bucket: MediaBucket; conversationId: string; messageId: string;
+}): Promise<void> {
+  const path = deletedDirectMessageMediaPath(input.conversationId, input.messageId, input.before, input.after);
+  if (!path) return;
+  await input.bucket.file(path).delete({ ignoreNotFound: true });
+  logger.info('Deleted direct message media cleaned up.', { conversationId: input.conversationId, messageId: input.messageId });
+}

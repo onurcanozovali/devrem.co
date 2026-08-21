@@ -4,13 +4,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { getDevreIdentityKey, hasExactDevreIdentity } from '@devrem/devre-domain';
-import { createDevreGroupId, decideDevreGroupMembershipTransition } from '../src/devreGroups';
+import {
+  createDevreGroupDocument,
+  createDevreGroupId,
+  createTravelGroupId,
+  decideDevreGroupMembershipTransition,
+} from '../src/devreGroups';
 import { backfillDevreGroups } from '../src/devreGroupBackfill';
 import type { PublicProfileProjection } from '../src/publicProfile';
 import type { Firestore } from 'firebase-admin/firestore';
 
 const profile: PublicProfileProjection = {
   firstName: 'Onur',
+  lastName: 'Özovalı',
   residenceCity: 34,
   departureCity: 34,
   militaryCity: 43,
@@ -19,6 +25,7 @@ const profile: PublicProfileProjection = {
   militaryType: 'standard',
   militaryUnitId: null,
   militaryUnitName: '1. Piyade Tugayı',
+  forceCode: null,
   photoPath: null,
 };
 
@@ -38,6 +45,27 @@ test('every canonical identity field changes the group', () => {
     { ...profile, militaryUnitName: '2. Piyade Tugayı' },
   ]) assert.notEqual(createDevreGroupId(changed), groupId);
   assert.equal(createDevreGroupId({ ...profile, militaryUnitName: null }), null);
+});
+
+test('travel group adds departure city without weakening exact Devre identity', () => {
+  const travelGroupId = createTravelGroupId(profile);
+  assert.equal(travelGroupId, createTravelGroupId({ ...profile }));
+  assert.notEqual(createTravelGroupId({ ...profile, departureCity: 6 }), travelGroupId);
+  assert.notEqual(createTravelGroupId({ ...profile, militaryUnitName: '2. Piyade Tugayı' }), travelGroupId);
+  assert.notEqual(createTravelGroupId({ ...profile, militaryPeriodMonth: 3 }), travelGroupId);
+});
+
+test('legacy profiles cannot write undefined optional fields to group documents', () => {
+  const legacyProfile = {
+    ...profile,
+    militaryUnitId: undefined,
+    forceCode: undefined,
+  } as unknown as PublicProfileProjection;
+  const document = createDevreGroupDocument(legacyProfile, 'devre-v1-test', 'devre');
+  assert.equal(document.militaryUnitId, null);
+  assert.equal(document.militaryUnitName, profile.militaryUnitName);
+  assert.equal(document.forceCode, null);
+  assert.equal(Object.values(document).includes(undefined), false);
 });
 
 test('membership transition is retry-safe and migrates or removes stale membership', () => {

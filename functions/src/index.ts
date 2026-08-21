@@ -6,12 +6,13 @@ import { initializeApp } from 'firebase-admin/app';
 import { logger } from 'firebase-functions';
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
+import { deleteDirectNotificationDataForUser, getOrCreateDirectConversation, processDirectMessage, synchronizeDirectBlockRelationship } from './directMessages.js';
 import { deleteAccountData, getProfilePhotoPath, isAuthUserMissing } from './accountDeletion.js';
 import { deleteDevreGroupMembershipForUser, synchronizeDevreGroupMembership } from './devreGroups.js';
 import { deleteNotificationDataForUser, processDiscoveryMembershipChange } from './discoveryNotifications.js';
 import { synchronizePublicProfile } from './publicProfileSync.js';
 import { deleteGroupNotificationDataForUser, processGroupChatMessage } from './groupChatNotifications.js';
-import { cleanupDeletedGroupMessageMedia } from './groupChatDeletion.js';
+import { cleanupDeletedDirectMessageMedia as cleanupDeletedDirectMessageMediaFile, cleanupDeletedGroupMessageMedia } from './groupChatDeletion.js';
 
 initializeApp();
 
@@ -58,6 +59,30 @@ export const notifyDevreGroupMessage = onDocumentCreated(
   },
 );
 
+export const notifyDirectMessage = onDocumentCreated(
+  {
+    document: 'directConversations/{conversationId}/messages/{messageId}',
+    memory: '256MiB', region: 'europe-west1', retry: true, timeoutSeconds: 120,
+  },
+  async (event) => processDirectMessage({
+    conversationId: event.params.conversationId,
+    database: getFirestore(),
+    messageId: event.params.messageId,
+    messaging: getMessaging(),
+    value: event.data?.data() ?? null,
+  }),
+);
+
+export const syncDirectBlockRelationship = onDocumentWritten(
+  {
+    document: 'users/{uid}/blockedUsers/{blockedUid}',
+    memory: '256MiB', region: 'europe-west1', retry: true, timeoutSeconds: 60,
+  },
+  async (event) => synchronizeDirectBlockRelationship(
+    getFirestore(), event.params.uid, event.params.blockedUid,
+  ),
+);
+
 export const cleanupDeletedDevreGroupMessageMedia = onDocumentUpdated(
   {
     document: 'devreGroups/{groupId}/messages/{messageId}',
@@ -75,10 +100,59 @@ export const cleanupDeletedDevreGroupMessageMedia = onDocumentUpdated(
   }),
 );
 
+export const cleanupDeletedDirectMessageMedia = onDocumentUpdated(
+  {
+    document: 'directConversations/{conversationId}/messages/{messageId}',
+    memory: '256MiB', region: 'europe-west1', retry: true, timeoutSeconds: 120,
+  },
+  async (event) => cleanupDeletedDirectMessageMediaFile({
+    after: event.data?.after.data() ?? null,
+    before: event.data?.before.data() ?? null,
+    bucket: getStorage().bucket(),
+    conversationId: event.params.conversationId,
+    messageId: event.params.messageId,
+  }),
+);
+
 function readBearerToken(authorizationHeader: string | undefined): string | null {
   const match = authorizationHeader?.match(/^Bearer ([^\s]+)$/);
   return match?.[1] ?? null;
 }
+
+export const getOrCreateDirectConversationEndpoint = onRequest(
+  { cors: false, memory: '256MiB', region: 'europe-west1', timeoutSeconds: 30 },
+  async (request, response) => {
+    const requestStartedAt = Date.now();
+    if (request.method !== 'POST') { response.status(405).json({ code: 'method-not-allowed' }); return; }
+    const token = readBearerToken(request.header('Authorization'));
+    if (!token) { response.status(401).json({ code: 'unauthenticated' }); return; }
+    try {
+      const authStartedAt = Date.now();
+      const caller = await getAuth().verifyIdToken(token, true);
+      const authDurationMs = Date.now() - authStartedAt;
+      const recipientUid = typeof request.body?.recipientUid === 'string' ? request.body.recipientUid.trim() : '';
+      const phases: Partial<Record<'creationPreferences' | 'lookup' | 'write', number>> = {};
+      let outcome: 'created' | 'reused' | 'unhidden' = 'reused';
+      const conversationId = await getOrCreateDirectConversation(getFirestore(), caller.uid, recipientUid, {
+        onOutcome: (nextOutcome) => { outcome = nextOutcome; },
+        onPhase: (phase, durationMs) => { phases[phase] = durationMs; },
+      });
+      response.status(200).json({ conversationId });
+      logger.info('Direct conversation endpoint completed.', {
+        authDurationMs,
+        conversationLookupDurationMs: phases.lookup ?? null,
+        creationPreferencesDurationMs: phases.creationPreferences ?? null,
+        conversationWriteDurationMs: phases.write ?? null,
+        outcome,
+        totalDurationMs: Date.now() - requestStartedAt,
+      });
+    } catch (error: unknown) {
+      const code = error instanceof Error ? error.message : 'direct-conversation-failed';
+      const status = code === 'unauthenticated' ? 401 : code === 'recipient-not-found' ? 404 : 403;
+      response.status(status).json({ code });
+    }
+  },
+);
 
 export const deleteAccount = onRequest(
   {
@@ -131,6 +205,7 @@ export const deleteAccount = onRequest(
           await Promise.all([
             deleteNotificationDataForUser(database, userId),
             deleteGroupNotificationDataForUser(database, userId),
+            deleteDirectNotificationDataForUser(database, userId),
           ]);
         },
         deleteDevreGroupMembership: async (userId) => {

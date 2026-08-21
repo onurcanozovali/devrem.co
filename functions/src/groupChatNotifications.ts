@@ -88,6 +88,7 @@ function isPermanentTokenError(code: string | undefined): boolean {
 async function notifyRecipient(input: {
   database: Firestore;
   groupId: string;
+  groupLabel: string;
   messageId: string;
   messaging: Messaging;
   recipientUid: string;
@@ -95,7 +96,7 @@ async function notifyRecipient(input: {
   senderUid: string;
   message: NonNullable<ReturnType<typeof parseGroupChatMessage>>;
 }): Promise<void> {
-  const { database, groupId, message, messageId, messaging, recipientUid, senderName, senderUid } = input;
+  const { database, groupId, groupLabel, message, messageId, messaging, recipientUid, senderName, senderUid } = input;
   const preferences = await database.doc(`users/${recipientUid}/notificationPreferences/main`).get();
   if (!preferences.exists || !allowsGroupMessageNotifications(preferences.data())) return;
   const deliveryId = await reserveDelivery({ database, groupId, messageId, recipientUid, senderUid });
@@ -106,7 +107,7 @@ async function notifyRecipient(input: {
     await delivery.update({ status: 'no-active-devices', updatedAt: FieldValue.serverTimestamp() });
     return;
   }
-  const copy = createGroupMessageNotificationCopy(senderName, message);
+  const copy = createGroupMessageNotificationCopy(senderName, message, groupLabel);
   try {
     const response = await messaging.sendEach(devices.map(({ token }) => ({
       token,
@@ -185,14 +186,38 @@ export async function processGroupChatMessage(input: {
   const senderName = senderProfile.exists && typeof senderProfile.get('firstName') === 'string'
     ? senderProfile.get('firstName') as string
     : 'Bir devren';
+  const groupLabel = group.get('kind') === 'travel' ? 'Yol Arkadaşları' : 'Devre Grubu';
+  const createdAt = isRecord(value) && value.createdAt instanceof Timestamp ? value.createdAt : null;
+  if (createdAt) {
+    const preview = message.type === 'text' ? message.text ?? ''
+      : message.type === 'image' ? 'Fotoğraf'
+        : message.type === 'document' ? 'Belge' : 'Sesli mesaj';
+    await database.runTransaction(async (transaction) => {
+      const current = await transaction.get(group.ref);
+      const currentLastMessageAt = current.get('lastMessageAt');
+      if (currentLastMessageAt instanceof Timestamp && currentLastMessageAt.toMillis() > createdAt.toMillis()) return;
+      transaction.set(group.ref, {
+        lastMessageAt: createdAt,
+        lastMessagePreview: `${senderName}: ${preview}`.slice(0, 180),
+        lastMessageType: message.type,
+        lastSenderUid: message.senderUid,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    });
+  }
   const recipientUids = selectGroupMessageRecipients(
-    members.docs.map((document) => document.id),
+    members.docs.flatMap((document) => (
+      document.get('status') === undefined || document.get('status') === 'active'
+        ? [document.id]
+        : []
+    )),
     message.senderUid,
   );
   for (let index = 0; index < recipientUids.length; index += 10) {
     await Promise.all(recipientUids.slice(index, index + 10).map((recipientUid) => notifyRecipient({
       database,
       groupId,
+      groupLabel,
       messageId,
       messaging,
       recipientUid,

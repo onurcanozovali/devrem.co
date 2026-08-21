@@ -81,6 +81,7 @@ export function buildDiscoverySeedProfiles(context: DiscoverySeedContext): Disco
     militaryType: context.militaryType,
     militaryUnitId: null,
     militaryUnitName: null,
+    forceCode: null,
     photoPath: null,
   };
   const create = (
@@ -96,6 +97,7 @@ export function buildDiscoverySeedProfiles(context: DiscoverySeedContext): Disco
     profile: {
       ...base,
       firstName,
+      lastName: 'Kullanıcı',
       ...overrides,
       photoPath: hasAvatar ? `users/${id}/profile/avatar.jpg` : null,
     },

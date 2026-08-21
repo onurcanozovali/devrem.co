@@ -69,6 +69,9 @@ test('notification copy is safe and truncates long multiline text', () => {
     id: 'message-3', senderUid: 'user-1', type: 'image', text: null, mediaPath: 'image.jpg', fileName: null,
   }).body, '📷 Fotoğraf');
   assert.equal(createGroupMessageNotificationCopy('Onur', {
+    id: 'message-4', senderUid: 'user-1', type: 'text', text: 'Selam', mediaPath: null, fileName: null,
+  }, 'Yol Arkadaşları').title, 'Onur • Yol Arkadaşları');
+  assert.equal(createGroupMessageNotificationCopy('Onur', {
     id: 'message-4', senderUid: 'user-1', type: 'audio', text: null, mediaPath: 'audio.m4a', fileName: null,
   }).body, '🎤 Sesli mesaj');
   assert.equal(createGroupMessageNotificationCopy('Onur', {

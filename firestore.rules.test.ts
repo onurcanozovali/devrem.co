@@ -12,6 +12,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDoc,
@@ -340,12 +341,186 @@ test('clients can read only their membership pointer and cannot mutate group mem
   const ownerDatabase = environment.authenticatedContext('user-1').firestore();
   await assertSucceeds(getDoc(doc(ownerDatabase, '_devreGroupMemberships', 'user-1')));
   await assertFails(getDoc(doc(environment.authenticatedContext('user-2').firestore(), '_devreGroupMemberships', 'user-1')));
+  await environment.withSecurityRulesDisabled(async (context) => setDoc(
+    doc(context.firestore(), '_travelGroupMemberships', 'user-1'),
+    { uid: 'user-1', groupId: `travel-v1-${'c'.repeat(64)}` },
+  ));
+  await assertSucceeds(getDoc(doc(ownerDatabase, '_travelGroupMemberships', 'user-1')));
+  await assertFails(getDoc(doc(environment.authenticatedContext('user-2').firestore(), '_travelGroupMemberships', 'user-1')));
   await assertFails(setDoc(doc(ownerDatabase, 'devreGroups', groupId, 'members', 'user-2'), {
     uid: 'user-2',
     joinedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   }));
   await assertFails(deleteDoc(doc(ownerDatabase, 'devreGroups', groupId, 'members', 'user-1')));
+});
+
+test('legal acceptance is versioned, owner-private, and uses acknowledgement semantics', async () => {
+  await environment.clearFirestore();
+  const ownerDatabase = environment.authenticatedContext('user-1').firestore();
+  const reference = doc(ownerDatabase, 'users/user-1/legal/acceptance');
+  await assertSucceeds(setDoc(reference, {
+    termsAcceptedVersion: '2026-08-20-v1',
+    termsAcceptedAt: serverTimestamp(),
+    privacyNoticeAcknowledgedVersion: '2026-08-20-v1',
+    privacyNoticeAcknowledgedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(getDoc(reference));
+  await assertFails(getDoc(doc(environment.authenticatedContext('user-2').firestore(), 'users/user-1/legal/acceptance')));
+  await assertFails(setDoc(doc(environment.authenticatedContext('user-2').firestore(), 'users/user-1/legal/acceptance'), {
+    termsAcceptedVersion: '2026-08-20-v1',
+    termsAcceptedAt: serverTimestamp(),
+    privacyNoticeAcknowledgedVersion: '2026-08-20-v1',
+    privacyNoticeAcknowledgedAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(reference, {
+    termsAcceptedVersion: '2026-08-20-v1',
+    termsAcceptedAt: serverTimestamp(),
+    privacyConsentVersion: '2026-08-20-v1',
+    privacyConsentAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(reference, {
+    termsAcceptedVersion: 'old-version',
+    termsAcceptedAt: serverTimestamp(),
+    privacyNoticeAcknowledgedVersion: '2026-08-20-v1',
+    privacyNoticeAcknowledgedAt: serverTimestamp(),
+  }));
+});
+
+test('a departed member immediately loses group read and message write access', async () => {
+  await environment.clearFirestore();
+  const groupId = `devre-v1-${'f'.repeat(64)}`;
+  await seedDevreGroup(groupId, ['user-1', 'user-2']);
+  await environment.withSecurityRulesDisabled(async (context) => setDoc(
+    doc(context.firestore(), 'devreGroups', groupId, 'members', 'user-1'),
+    { status: 'left', leftAt: Timestamp.now() },
+    { merge: true },
+  ));
+  const departed = environment.authenticatedContext('user-1').firestore();
+  await assertFails(getDoc(doc(departed, 'devreGroups', groupId)));
+  await assertFails(getDocs(collection(departed, 'devreGroups', groupId, 'messages')));
+  await assertFails(setDoc(doc(departed, 'devreGroups', groupId, 'messages', 'after-leaving'), {
+    id: 'after-leaving', senderUid: 'user-1', type: 'text', text: 'Yetkisiz',
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), schemaVersion: 3,
+  }));
+});
+
+test('direct conversations are private to two immutable participants and blocks stop sends', async () => {
+  await environment.clearFirestore();
+  const conversationId = `direct-v1-${'d'.repeat(64)}`;
+  await environment.withSecurityRulesDisabled(async (context) => setDoc(
+    doc(context.firestore(), 'directConversations', conversationId),
+    {
+      conversationId,
+      type: 'direct',
+      participantUids: ['user-1', 'user-2'],
+      schemaVersion: 1,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      lastMessageAt: null,
+    },
+  ));
+  const first = environment.authenticatedContext('user-1').firestore();
+  const second = environment.authenticatedContext('user-2').firestore();
+  const third = environment.authenticatedContext('user-3').firestore();
+  await assertSucceeds(getDoc(doc(first, 'directConversations', conversationId)));
+  await assertSucceeds(getDoc(doc(second, 'directConversations', conversationId)));
+  await assertFails(getDoc(doc(third, 'directConversations', conversationId)));
+  const message = {
+    id: 'dm-1', senderUid: 'user-1', type: 'text', text: 'Selam',
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), replyToMessageId: null, schemaVersion: 1,
+  };
+  await assertSucceeds(setDoc(doc(first, 'directConversations', conversationId, 'messages', 'dm-1'), message));
+  await assertSucceeds(setDoc(doc(second, 'directConversations', conversationId, 'messages', 'dm-2'), {
+    ...message, id: 'dm-2', senderUid: 'user-2', text: 'Merhaba', replyToMessageId: 'dm-1',
+  }));
+  await assertSucceeds(setDoc(doc(first, 'directConversations', conversationId, 'messages', 'dm-image'), {
+    id: 'dm-image', senderUid: 'user-1', type: 'image',
+    mediaPath: `directConversations/${conversationId}/media/dm-image/image.jpg`,
+    caption: 'Fotoğraf', width: 1200, height: 900,
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), replyToMessageId: null, schemaVersion: 1,
+  }));
+  await assertSucceeds(setDoc(doc(first, 'directConversations', conversationId, 'messages', 'dm-document'), {
+    id: 'dm-document', senderUid: 'user-1', type: 'document',
+    mediaPath: `directConversations/${conversationId}/media/dm-document/document`,
+    fileName: 'belge.pdf', mimeType: 'application/pdf', sizeBytes: 4096, extension: 'pdf',
+    createdAt: serverTimestamp(), clientCreatedAt: Timestamp.now(), replyToMessageId: 'dm-2', schemaVersion: 1,
+  }));
+  await assertFails(setDoc(doc(first, 'directConversations', conversationId, 'messages', 'dm-bad-reply'), {
+    ...message, id: 'dm-bad-reply', replyToMessageId: 'missing-message',
+  }));
+  await assertFails(setDoc(doc(second, 'directConversations', conversationId, 'messages', 'dm-spoof'), {
+    ...message, id: 'dm-spoof', senderUid: 'user-1',
+  }));
+  await assertFails(setDoc(doc(third, 'directConversations', conversationId, 'messages', 'dm-2'), {
+    ...message, id: 'dm-2', senderUid: 'user-3',
+  }));
+  await assertFails(updateDoc(doc(first, 'directConversations', conversationId), {
+    participantUids: ['user-1', 'user-2', 'user-3'],
+  }));
+  await assertSucceeds(setDoc(doc(second, 'users', 'user-2', 'blockedUsers', 'user-1'), {
+    blockedUid: 'user-1', createdAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(first, 'directConversations', conversationId, 'messages', 'dm-3'), {
+    ...message, id: 'dm-3',
+  }));
+  await assertFails(setDoc(doc(second, 'directConversations', conversationId, 'messages', 'dm-3b'), {
+    ...message, id: 'dm-3b', senderUid: 'user-2',
+  }));
+  await assertSucceeds(getDoc(doc(first, 'directConversations', conversationId, 'messages', 'dm-1')));
+  await assertSucceeds(getDoc(doc(second, 'directConversations', conversationId)));
+  await assertSucceeds(deleteDoc(doc(second, 'users', 'user-2', 'blockedUsers', 'user-1')));
+  await assertSucceeds(setDoc(doc(first, 'directConversations', conversationId, 'messages', 'dm-4'), {
+    ...message, id: 'dm-4', replyToMessageId: 'dm-2',
+  }));
+  await assertSucceeds(setDoc(doc(first, 'moderationReports', 'report-1'), {
+    reporterUid: 'user-1', reportedUid: 'user-2', conversationType: 'direct', conversationId,
+    messageId: 'dm-2', reason: 'Spam', status: 'open', createdAt: serverTimestamp(),
+  }));
+  await assertSucceeds(getDoc(doc(first, 'directConversations', conversationId)));
+  const blockAfterReport = await assertSucceeds(getDoc(doc(first, 'users', 'user-1', 'blockedUsers', 'user-2')));
+  assert.equal(blockAfterReport.exists(), false);
+  const stateAfterReport = await assertSucceeds(getDoc(doc(first, 'directConversations', conversationId, 'participantStates', 'user-1')));
+  assert.equal(stateAfterReport.exists(), false);
+  await assertFails(setDoc(doc(third, 'moderationReports', 'report-2'), {
+    reporterUid: 'user-3', reportedUid: 'user-2', conversationType: 'direct', conversationId,
+    messageId: null, reason: 'Spam', status: 'open', createdAt: serverTimestamp(),
+  }));
+  const hidden = doc(first, 'users', 'user-1', 'hiddenDirectMessages', conversationId, 'messages', 'dm-2');
+  await assertSucceeds(setDoc(hidden, { conversationId, messageId: 'dm-2', hiddenAt: serverTimestamp() }));
+  await assertSucceeds(getDoc(hidden));
+  await assertFails(getDoc(doc(second, 'users', 'user-1', 'hiddenDirectMessages', conversationId, 'messages', 'dm-2')));
+  const hiddenConversation = doc(first, 'directConversations', conversationId, 'participantStates', 'user-1');
+  await assertSucceeds(setDoc(hiddenConversation, { uid: 'user-1', unreadCount: 0, hidden: true, hiddenAt: serverTimestamp() }));
+  await assertSucceeds(getDoc(hiddenConversation));
+  await assertFails(getDoc(doc(second, 'directConversations', conversationId, 'participantStates', 'user-1')));
+  const ownerStates = await assertSucceeds(getDocs(query(
+    collectionGroup(first, 'participantStates'),
+    where('uid', '==', 'user-1'),
+  )));
+  assert.equal(ownerStates.size, 1);
+  await assertFails(getDocs(query(
+    collectionGroup(second, 'participantStates'),
+    where('uid', '==', 'user-1'),
+  )));
+  await assertSucceeds(getDoc(doc(second, 'directConversations', conversationId)));
+});
+
+test('owner may save canonical unit fields but invalid force codes are rejected', async () => {
+  await environment.clearFirestore();
+  await seedProfile('user-1', 2025, 7);
+  const reference = doc(environment.authenticatedContext('user-1').firestore(), 'users', 'user-1');
+  await assertSucceeds(updateDoc(reference, {
+    militaryUnit: 'Hava Er Eğitim Tugay Komutanlığı',
+    militaryUnitId: 'air-43-hava-er-egitim-tugay-komutanligi',
+    militaryUnitNameSnapshot: 'Hava Er Eğitim Tugay Komutanlığı',
+    forceCode: 'air',
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(reference, {
+    forceCode: 'unknown-force',
+    updatedAt: serverTimestamp(),
+  }));
 });
 
 test('group messages are member-only, immutable, bounded, and sender-authenticated', async () => {
