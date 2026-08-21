@@ -6,14 +6,14 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { LoadingState } from '@/components/common/LoadingState';
 import { ScreenContainer } from '@/components/common/ScreenContainer';
 import { GroupChat } from './GroupChat';
-import { useCurrentDevreGroup } from './useCurrentDevreGroup';
+import { useCurrentDevreGroupById } from './useCurrentDevreGroupById';
 import { parseGroupChatReturnPath } from './groupChatNavigation';
 
 export function GroupChatRouteScreen() {
   const params = useLocalSearchParams<{ groupId?: string | string[]; returnTo?: string | string[]; source?: string | string[] }>();
   const groupId = typeof params.groupId === 'string' ? params.groupId : '';
   const returnTo = parseGroupChatReturnPath(params.returnTo);
-  const { error, result, retry, session } = useCurrentDevreGroup();
+  const { error, group, retry, session } = useCurrentDevreGroupById(groupId);
   const leaveChat = useCallback(() => {
     if (returnTo) router.replace(returnTo);
     else if (router.canGoBack()) router.back();
@@ -25,9 +25,9 @@ export function GroupChatRouteScreen() {
     return () => subscription.remove();
   }, [leaveChat, returnTo]);
   if (error) return <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}><EmptyState title="Sohbet açılamadı" description={error} actionLabel="Tekrar dene" onAction={retry} /></ScreenContainer>;
-  if (!result) return <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}><LoadingState label="Sohbet açılıyor…" /></ScreenContainer>;
-  if (result.status !== 'ready' || result.group.groupId !== groupId || !session) {
-    return <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}><EmptyState title="Bu grup erişilebilir değil" description="Yalnızca güncel canonical Devre grubunun sohbetini açabilirsin." /></ScreenContainer>;
+  if (group === undefined) return <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}><LoadingState label="Sohbet açılıyor…" /></ScreenContainer>;
+  if (!group || !session) {
+    return <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}><EmptyState title="Bu gruba artık erişimin yok" description="Yalnızca güncel Devre ve Yol Arkadaşları gruplarının sohbetini açabilirsin." actionLabel="Güncel sohbetlere dön" onAction={leaveChat} /></ScreenContainer>;
   }
-  return <GroupChat group={result.group} onBack={leaveChat} userId={session.userId} />;
+  return <GroupChat group={group} onBack={leaveChat} userId={session.userId} />;
 }

@@ -2,6 +2,7 @@ export const groupChatReturnPaths = [
   '/(tabs)',
   '/(tabs)/preparation',
   '/(tabs)/matching',
+  '/(tabs)/chats',
   '/(tabs)/profile',
 ] as const;
 
@@ -14,6 +15,7 @@ export function rememberGroupChatReturnTab(routeName: string | undefined): void 
     index: '/(tabs)',
     preparation: '/(tabs)/preparation',
     matching: '/(tabs)/matching',
+    chats: '/(tabs)/chats',
     profile: '/(tabs)/profile',
   };
   if (routeName && paths[routeName]) returnPath = paths[routeName];

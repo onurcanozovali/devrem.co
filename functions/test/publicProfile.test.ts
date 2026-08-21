@@ -28,6 +28,7 @@ test('trusted projection contains only discovery-safe normalized fields', () => 
   const projection = createPublicProfileProjection('user-1', privateProfile);
   assert.deepEqual(projection, {
     firstName: 'Onur',
+    lastName: 'Özovalı',
     residenceCity: 34,
     departureCity: 34,
     militaryCity: 6,
@@ -36,9 +37,10 @@ test('trusted projection contains only discovery-safe normalized fields', () => 
     militaryType: 'standard',
     militaryUnitId: null,
     militaryUnitName: '1. Piyade Tugayı',
+    forceCode: null,
     photoPath: 'users/user-1/profile/avatar.jpg',
   });
-  assert.equal('lastName' in (projection ?? {}), false);
+  assert.equal(projection?.lastName, 'Özovalı');
   assert.equal('birthYear' in (projection ?? {}), false);
   assert.equal('uid' in (projection ?? {}), false);
 });
@@ -52,4 +54,38 @@ test('incomplete or invalid private profiles are not projected', () => {
     ...privateProfile,
     photoPath: 'users/user-2/profile/avatar.jpg',
   }), null);
+});
+
+test('private legal acceptance data is never copied to the public profile', () => {
+  const projection = createPublicProfileProjection('user-1', {
+    ...privateProfile,
+    legal: {
+      termsAcceptedVersion: '2026-08-20-v1',
+      privacyNoticeAcknowledgedVersion: '2026-08-20-v1',
+    },
+  });
+  assert.equal('legal' in (projection ?? {}), false);
+  assert.equal('termsAcceptedVersion' in (projection ?? {}), false);
+});
+
+test('trusted projection preserves canonical unit identity and force branding', () => {
+  assert.deepEqual(createPublicProfileProjection('user-1', {
+    ...privateProfile,
+    militaryUnitId: 'air-43-hava-er-egitim-tugay-komutanligi',
+    militaryUnitNameSnapshot: 'Hava Er Eğitim Tugay Komutanlığı',
+    forceCode: 'air',
+  }), {
+    firstName: 'Onur',
+    lastName: 'Özovalı',
+    residenceCity: 34,
+    departureCity: 34,
+    militaryCity: 6,
+    militaryPeriodYear: 2027,
+    militaryPeriodMonth: 2,
+    militaryType: 'standard',
+    militaryUnitId: 'air-43-hava-er-egitim-tugay-komutanligi',
+    militaryUnitName: 'Hava Er Eğitim Tugay Komutanlığı',
+    forceCode: 'air',
+    photoPath: 'users/user-1/profile/avatar.jpg',
+  });
 });

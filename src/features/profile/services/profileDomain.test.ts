@@ -45,6 +45,9 @@ const historicalProfile: UserProfile = {
   militaryPeriodYear: 2025,
   militaryPeriodMonth: 7,
   reportingDate: '2025-07-10',
+  militaryUnitId: null,
+  militaryUnitNameSnapshot: null,
+  forceCode: null,
   photoPath: null,
   onboardingCompleted: true,
   createdAt: null,
@@ -175,6 +178,22 @@ test('serializer writes the flat query-friendly schema and permits an unknown un
   assert.equal(serialized.militaryUnit, null);
   assert.equal('militaryPeriod' in serialized, false);
   assert.deepEqual(parseCompletedProfileData('user-1', serialized), serialized);
+});
+
+test('serializer stores canonical unit identity from the catalog and rejects a city mismatch', () => {
+  const canonicalInput: CompleteUserProfileInput = {
+    ...validInput,
+    militaryCity: 43,
+    militaryUnit: 'Eski görünen ad',
+    militaryUnitId: 'air-43-hava-er-egitim-tugay-komutanligi',
+    militaryUnitNameSnapshot: 'Eski görünen ad',
+    forceCode: 'land',
+  };
+  const serialized = serializeCompletedProfileData('user-1', canonicalInput, referenceDate);
+  assert.equal(serialized?.militaryUnitId, 'air-43-hava-er-egitim-tugay-komutanligi');
+  assert.equal(serialized?.militaryUnitNameSnapshot, 'Hava Er Eğitim Tugay Komutanlığı');
+  assert.equal(serialized?.forceCode, 'air');
+  assert.equal(serializeCompletedProfileData('user-1', { ...canonicalInput, militaryCity: 6 }, referenceDate), null);
 });
 
 test('profile photos remain optional and only accept the deterministic owner path', () => {

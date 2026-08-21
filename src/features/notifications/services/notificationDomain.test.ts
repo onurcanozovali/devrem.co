@@ -58,6 +58,12 @@ test('deep-link payloads accept only semantic discovery profile targets', () => 
     groupId: `devre-v1-${'a'.repeat(64)}`,
     eventId: 'message-event-1',
   }), { eventId: 'message-event-1', groupId: `devre-v1-${'a'.repeat(64)}`, target: 'groupChat' });
+  assert.deepEqual(parseNotificationTarget({
+    type: 'group.message', target: 'groupChat', eventId: 'message-event-2', groupId: `travel-v1-${'b'.repeat(64)}`,
+  }), { eventId: 'message-event-2', groupId: `travel-v1-${'b'.repeat(64)}`, target: 'groupChat' });
+  assert.deepEqual(parseNotificationTarget({
+    type: 'direct_message', target: 'directChat', eventId: 'dm-event-1', conversationId: `direct-v1-${'c'.repeat(64)}`,
+  }), { conversationId: `direct-v1-${'c'.repeat(64)}`, eventId: 'dm-event-1', target: 'directChat' });
   assert.equal(parseNotificationTarget({
     type: 'testDiscovery',
     target: 'profile',

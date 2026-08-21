@@ -150,6 +150,10 @@ export function NotificationProvider({ children }: PropsWithChildren) {
 
   const openTarget = useCallback((target: NotificationTarget) => {
     setBanner(null);
+    if (target.target === 'directChat') {
+      router.navigate({ pathname: '/direct-chat/[conversationId]', params: { conversationId: target.conversationId } });
+      return;
+    }
     if (target.target === 'groupChat') {
       router.navigate({ pathname: '/group-chat/[groupId]', params: { groupId: target.groupId } });
       return;
@@ -244,6 +248,7 @@ export function NotificationProvider({ children }: PropsWithChildren) {
         !target
         || (target.target === 'profile' && pathnameRef.current === `/devre/${target.profileUserId}`)
         || (target.target === 'groupChat' && getActiveDevreGroupChatId() === target.groupId)
+        || (target.target === 'directChat' && pathnameRef.current === `/direct-chat/${target.conversationId}`)
       ) return;
       setBanner({
         target,

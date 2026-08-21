@@ -36,6 +36,7 @@ interface PreparationContextValue {
   state: PreparationState | null;
   error: string | null;
   actionError: string | null;
+  activatePreparation: () => () => void;
   startPreparation: () => Promise<void>;
   retryPreparation: () => Promise<void>;
   addItem: (input: PreparationItemInput) => Promise<void>;
@@ -83,6 +84,8 @@ export function PreparationProvider({ children }: PropsWithChildren) {
   const loadPromiseRef = useRef<Promise<void> | null>(null);
   const activeUidRef = useRef<string | null>(null);
   const subscriptionsRef = useRef<Unsubscribe[]>([]);
+  const subscriptionGenerationRef = useRef(0);
+  const activeConsumersRef = useRef(new Set<symbol>());
 
   const replaceItems = useCallback((nextItems: PreparationItem[]) => {
     itemsRef.current = nextItems;
@@ -100,6 +103,7 @@ export function PreparationProvider({ children }: PropsWithChildren) {
   }, []);
 
   const stopSubscriptions = useCallback(() => {
+    subscriptionGenerationRef.current += 1;
     subscriptionsRef.current.forEach((unsubscribe) => unsubscribe());
     subscriptionsRef.current = [];
   }, []);
@@ -112,6 +116,7 @@ export function PreparationProvider({ children }: PropsWithChildren) {
 
     stopSubscriptions();
     activeUidRef.current = uid;
+    const generation = subscriptionGenerationRef.current;
     setStatus('loading');
     setError(null);
     setActionError(null);
@@ -120,7 +125,7 @@ export function PreparationProvider({ children }: PropsWithChildren) {
       let receivedItems = false;
       let receivedState = false;
       const handleSubscriptionError = (caughtError: PreparationFlowError) => {
-        if (activeUidRef.current !== uid) return;
+        if (activeUidRef.current !== uid || subscriptionGenerationRef.current !== generation) return;
         if (itemsRef.current.length === 0 && !receivedState) {
           setError(caughtError.message);
           setStatus('error');
@@ -131,7 +136,7 @@ export function PreparationProvider({ children }: PropsWithChildren) {
 
       subscriptionsRef.current = [
         subscribeToPreparationItems(uid, (nextItems) => {
-          if (activeUidRef.current !== uid) return;
+          if (activeUidRef.current !== uid || subscriptionGenerationRef.current !== generation) return;
           receivedItems = true;
           replaceItems(mergeOptimisticItems(nextItems));
           if (nextItems.length > 0 || receivedState) {
@@ -140,7 +145,7 @@ export function PreparationProvider({ children }: PropsWithChildren) {
           }
         }, handleSubscriptionError),
         subscribeToPreparationState(uid, (nextState) => {
-          if (activeUidRef.current !== uid || !nextState) return;
+          if (activeUidRef.current !== uid || subscriptionGenerationRef.current !== generation || !nextState) return;
           receivedState = true;
           setState(nextState);
           if (receivedItems) {
@@ -152,7 +157,7 @@ export function PreparationProvider({ children }: PropsWithChildren) {
 
       try {
         const initializedState = await initializePreparation(uid);
-        if (activeUidRef.current !== uid) return;
+        if (activeUidRef.current !== uid || subscriptionGenerationRef.current !== generation) return;
         receivedState = true;
         setState(initializedState);
         if (receivedItems) {
@@ -160,7 +165,7 @@ export function PreparationProvider({ children }: PropsWithChildren) {
           setStatus('ready');
         }
       } catch (caughtError: unknown) {
-        if (activeUidRef.current !== uid) return;
+        if (activeUidRef.current !== uid || subscriptionGenerationRef.current !== generation) return;
         const preparationError = mapPreparationError(caughtError);
         if (itemsRef.current.length > 0 || receivedState) {
           setActionError(preparationError.message);
@@ -181,11 +186,26 @@ export function PreparationProvider({ children }: PropsWithChildren) {
   }, [authStatus, mergeOptimisticItems, replaceItems, session, stopSubscriptions]);
 
   const startPreparation = useCallback(() => loadPreparation(false), [loadPreparation]);
+  const activatePreparation = useCallback(() => {
+    const token = Symbol('preparation-consumer');
+    activeConsumersRef.current.add(token);
+    if (__DEV__) console.debug(`[perf] activate preparation (${activeConsumersRef.current.size} consumer)`);
+    void loadPreparation(false);
+    return () => {
+      activeConsumersRef.current.delete(token);
+      if (activeConsumersRef.current.size > 0) return;
+      stopSubscriptions();
+      activeUidRef.current = null;
+      loadPromiseRef.current = null;
+      if (__DEV__) console.debug('[perf] deactivate preparation');
+    };
+  }, [loadPreparation, stopSubscriptions]);
   const retryPreparation = useCallback(() => loadPreparation(true), [loadPreparation]);
 
   useEffect(() => {
     if (authStatus === 'authenticated' && session) return undefined;
     stopSubscriptions();
+    activeConsumersRef.current.clear();
     activeUidRef.current = null;
     loadPromiseRef.current = null;
     itemsRef.current = [];
@@ -325,6 +345,7 @@ export function PreparationProvider({ children }: PropsWithChildren) {
     state,
     error,
     actionError,
+    activatePreparation,
     startPreparation,
     retryPreparation,
     addItem,
@@ -336,6 +357,7 @@ export function PreparationProvider({ children }: PropsWithChildren) {
     clearActionError,
   }), [
     actionError,
+    activatePreparation,
     addItem,
     clearActionError,
     deleteItem,

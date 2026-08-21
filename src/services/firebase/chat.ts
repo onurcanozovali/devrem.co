@@ -1,5 +1,6 @@
 import {
   Timestamp,
+  addDoc,
   collection,
   doc,
   documentId,
@@ -25,6 +26,7 @@ import {
   type DevreChatDocumentExtension,
   type DevreChatMessage,
 } from '../../features/groups/chatDomain';
+import { countUnreadIncomingMessages } from '../../features/groups/chatRuntime';
 import { getFirebaseApp } from './app';
 import { getChatMediaPath } from './chatMedia';
 
@@ -125,6 +127,7 @@ export function createDocumentMessageDraft(input: {
 }
 
 export async function sendDevreChatMessage(groupId: string, message: DevreChatMessage): Promise<void> {
+  if (message.type === 'system') throw new Error('system-messages-are-server-managed');
   const common = {
     id: message.id, senderUid: message.senderUid, type: message.type,
     createdAt: serverTimestamp(), clientCreatedAt: Timestamp.fromDate(message.clientCreatedAt),
@@ -145,6 +148,65 @@ export function subscribeToRecentDevreChatMessages(groupId: string, onPage: (pag
   return onSnapshot(query(messagesCollection(groupId), orderBy('createdAt', 'desc'), limit(PAGE_SIZE)), (snapshot) => onPage(parsePage(snapshot)), onError);
 }
 
+export function subscribeToRecentGroupEvents(groupId: string, onChange: (events: DevreChatMessage[]) => void): () => void {
+  return onSnapshot(query(
+    collection(getFirestore(getFirebaseApp()), 'devreGroups', groupId, 'groupEvents'),
+    orderBy('createdAt', 'desc'), limit(40),
+  ), (snapshot) => {
+    if (!snapshot) { onChange([]); return; }
+    onChange(snapshot.docs.flatMap((item) => {
+    const data = item.data();
+    if (data.eventId !== item.id || (data.type !== 'membership.joined' && data.type !== 'membership.left')
+      || typeof data.displayName !== 'string' || !(data.createdAt instanceof Timestamp)) return [];
+    const createdAt = data.createdAt.toDate();
+    return [{
+      id: `event:${item.id}`,
+      senderUid: 'system',
+      type: 'system' as const,
+      text: data.type === 'membership.left' ? `${data.displayName} gruptan ayrıldı` : `${data.displayName} gruba katıldı`,
+      createdAt,
+      clientCreatedAt: createdAt,
+      status: 'sent' as const,
+      deletedForEveryone: false,
+      deletedAt: null,
+      deletedBy: null,
+      replyToMessageId: null,
+      }];
+    }));
+  }, () => onChange([]));
+}
+
+export function subscribeToGroupUnreadCount(
+  groupId: string,
+  uid: string,
+  onChange: (count: number) => void,
+  onError: (error: Error) => void,
+): () => void {
+  let messages: DevreChatMessage[] | null = null;
+  let cursorLoaded = false;
+  let lastReadAt: Date | null = null;
+  const emit = () => {
+    if (!messages || !cursorLoaded) return;
+    onChange(countUnreadIncomingMessages(messages, uid, lastReadAt));
+  };
+  const unsubscribeMessages = onSnapshot(
+    query(messagesCollection(groupId), orderBy('createdAt', 'desc'), limit(100)),
+    (snapshot) => { messages = parsePage(snapshot).messages; emit(); },
+    onError,
+  );
+  const unsubscribeCursor = onSnapshot(
+    doc(getFirestore(getFirebaseApp()), 'devreGroups', groupId, 'readCursors', uid),
+    (snapshot) => {
+      const value = snapshot.get('lastReadMessageCreatedAt');
+      lastReadAt = value instanceof Timestamp ? value.toDate() : null;
+      cursorLoaded = true;
+      emit();
+    },
+    onError,
+  );
+  return () => { unsubscribeMessages(); unsubscribeCursor(); };
+}
+
 export async function fetchOlderDevreChatMessages(groupId: string, cursor: DevreChatCursor): Promise<DevreChatPage> {
   return parsePage(await getDocs(query(messagesCollection(groupId), orderBy('createdAt', 'desc'), startAfter(cursor), limit(PAGE_SIZE))));
 }
@@ -162,6 +224,26 @@ export async function fetchRecentGroupDocuments(groupId: string, count = 4): Pro
 export async function hideGroupMessageForUser(uid: string, groupId: string, messageId: string): Promise<void> {
   await setDoc(doc(getFirestore(getFirebaseApp()), 'users', uid, 'hiddenGroupMessages', groupId, 'messages', messageId), {
     groupId, messageId, hiddenAt: serverTimestamp(),
+  });
+}
+
+export const groupReportReasons = ['Spam', 'Taciz / rahatsız etme', 'Uygunsuz içerik', 'Sahte / yanıltıcı profil', 'Diğer'] as const;
+export async function reportGroupMessage(input: {
+  groupId: string;
+  messageId: string;
+  reason: typeof groupReportReasons[number];
+  reportedUid: string;
+  reporterUid: string;
+}): Promise<void> {
+  await addDoc(collection(getFirestore(getFirebaseApp()), 'moderationReports'), {
+    reporterUid: input.reporterUid,
+    reportedUid: input.reportedUid,
+    conversationType: 'group',
+    conversationId: input.groupId,
+    messageId: input.messageId,
+    reason: input.reason,
+    status: 'open',
+    createdAt: serverTimestamp(),
   });
 }
 

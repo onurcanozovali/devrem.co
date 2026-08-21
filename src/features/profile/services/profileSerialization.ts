@@ -1,4 +1,6 @@
 import { isProvinceCode } from '@/data/turkeyProvinces';
+import { getMilitaryUnitById } from '@/features/militaryUnits/catalog';
+import { forceCodes, type ForceCode } from '@/features/militaryUnits/types';
 import {
   isReportingDateConsistent,
   isMilitaryPeriodCurrentOrFuture,
@@ -23,8 +25,15 @@ interface LegacyMilitaryPeriod {
   month: number;
 }
 
-export interface SerializedProfileData extends CompleteUserProfileInput {
+export interface SerializedProfileData
+  extends Omit<
+    CompleteUserProfileInput,
+    'militaryUnitId' | 'militaryUnitNameSnapshot' | 'forceCode'
+  > {
   uid: string;
+  militaryUnitId: string | null;
+  militaryUnitNameSnapshot: string | null;
+  forceCode: ForceCode | null;
   photoPath: string | null;
   onboardingCompleted: true;
 }
@@ -35,6 +44,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isMilitaryType(value: unknown): value is MilitaryType {
   return typeof value === 'string' && militaryTypes.some((type) => type === value);
+}
+
+function isForceCode(value: unknown): value is ForceCode {
+  return typeof value === 'string' && forceCodes.some((code) => code === value);
+}
+
+function getCanonicalAssignment(input: CompleteUserProfileInput): {
+  militaryUnit: string | null;
+  militaryUnitId: string | null;
+  militaryUnitNameSnapshot: string | null;
+  forceCode: ForceCode | null;
+} | null {
+  const normalizedUnit = input.militaryUnit === null ? null : normalizeWhitespace(input.militaryUnit);
+  const unitId = input.militaryUnitId ?? null;
+  if (!unitId) {
+    return {
+      militaryUnit: normalizedUnit,
+      militaryUnitId: null,
+      militaryUnitNameSnapshot: normalizedUnit,
+      forceCode: null,
+    };
+  }
+  const unit = getMilitaryUnitById(unitId);
+  if (!unit || unit.cityCode !== input.militaryCity) return null;
+  return {
+    militaryUnit: unit.name,
+    militaryUnitId: unit.id,
+    militaryUnitNameSnapshot: unit.name,
+    forceCode: unit.forceCode,
+  };
 }
 
 function parseLegacyMilitaryPeriod(value: unknown): LegacyMilitaryPeriod | null {
@@ -70,6 +109,10 @@ export function parseCompletedProfileData(
 
   const period = readMilitaryPeriod(value);
   const photoPath = value.photoPath ?? null;
+  const militaryUnitId = value.militaryUnitId ?? null;
+  const militaryUnitNameSnapshot = value.militaryUnitNameSnapshot ?? value.militaryUnit ?? null;
+  const forceCode = value.forceCode ?? null;
+  const canonicalUnit = typeof militaryUnitId === 'string' ? getMilitaryUnitById(militaryUnitId) : null;
   if (
     !period
     || !isValidName(value.firstName)
@@ -80,6 +123,10 @@ export function parseCompletedProfileData(
     || !isProvinceCode(value.militaryCity)
     || !isMilitaryType(value.militaryType)
     || !isValidOptionalMilitaryUnit(value.militaryUnit)
+    || !(militaryUnitId === null || typeof militaryUnitId === 'string')
+    || !isValidOptionalMilitaryUnit(militaryUnitNameSnapshot)
+    || !(forceCode === null || isForceCode(forceCode))
+    || (militaryUnitId !== null && (!canonicalUnit || canonicalUnit.cityCode !== value.militaryCity || canonicalUnit.forceCode !== forceCode))
     || !isValidStoredDate(value.reportingDate)
     || !isValidProfilePhotoPath(uid, photoPath)
   ) return null;
@@ -96,6 +143,9 @@ export function parseCompletedProfileData(
     militaryPeriodYear: period.year,
     militaryPeriodMonth: period.month,
     militaryUnit: value.militaryUnit === null ? null : normalizeWhitespace(value.militaryUnit),
+    militaryUnitId: militaryUnitId === null ? null : militaryUnitId,
+    militaryUnitNameSnapshot: canonicalUnit?.name ?? (militaryUnitNameSnapshot === null ? null : normalizeWhitespace(militaryUnitNameSnapshot)),
+    forceCode: canonicalUnit?.forceCode ?? null,
     reportingDate: value.reportingDate,
     photoPath,
     onboardingCompleted: true,
@@ -107,6 +157,7 @@ export function serializeCompletedProfileData(
   input: CompleteUserProfileInput,
   referenceDate = new Date(),
 ): SerializedProfileData | null {
+  const assignment = getCanonicalAssignment(input);
   if (
     !uid
     || !isValidName(input.firstName)
@@ -122,6 +173,7 @@ export function serializeCompletedProfileData(
       referenceDate,
     )
     || !isValidOptionalMilitaryUnit(input.militaryUnit)
+    || !assignment
     || !isReportingDateConsistent(
       input.reportingDate,
       input.militaryPeriodYear,
@@ -141,7 +193,7 @@ export function serializeCompletedProfileData(
     militaryType: input.militaryType,
     militaryPeriodYear: input.militaryPeriodYear,
     militaryPeriodMonth: input.militaryPeriodMonth,
-    militaryUnit: input.militaryUnit === null ? null : normalizeWhitespace(input.militaryUnit),
+    ...assignment,
     reportingDate: input.reportingDate,
     photoPath: null,
     onboardingCompleted: true,
@@ -167,9 +219,13 @@ export function serializeUpdatedProfileData(
   });
   if (!result.input) return null;
 
+  const assignment = getCanonicalAssignment(input);
+  if (!assignment) return null;
+
   return {
     uid,
     ...result.input,
+    ...assignment,
     photoPath: existingProfile.photoPath,
     onboardingCompleted: true,
   };

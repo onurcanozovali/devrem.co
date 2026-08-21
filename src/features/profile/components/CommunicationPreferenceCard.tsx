@@ -45,8 +45,8 @@ export function CommunicationPreferenceCard() {
     <Card style={{ gap: spacing.sm }}>
       <View style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.md, minHeight: 64 }}>
         <View style={{ flex: 1, gap: spacing.xs }}>
-          <AppText weight="700">Özel Mesajlar</AppText>
-          <AppText color="muted" variant="caption">Devrelerin sana özel mesaj gönderebilir.</AppText>
+          <AppText weight="700">Özel mesajlara izin ver</AppText>
+          <AppText color="muted" variant="caption">Açık olduğunda diğer Devrem kullanıcıları sana özel mesaj gönderebilir.</AppText>
         </View>
         <Switch
           accessibilityLabel="Özel Mesajlar"

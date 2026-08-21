@@ -8,7 +8,8 @@ service cloud.firestore {
 
     function isDevreGroupMember(groupId) {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/devreGroups/$(groupId)/members/$(request.auth.uid));
+        && exists(/databases/$(database)/documents/devreGroups/$(groupId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/devreGroups/$(groupId)/members/$(request.auth.uid)).data.status == 'active';
     }
 
     function isValidGroupMessageReply(groupId, messageId) {
@@ -31,6 +32,46 @@ service cloud.firestore {
 
     function isOwnProfile(uid) {
       return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function hasExactDevreAccess(profile) {
+      let viewer = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && viewer.militaryPeriodYear == profile.militaryPeriodYear
+        && viewer.militaryPeriodMonth == profile.militaryPeriodMonth
+        && viewer.militaryCity == profile.militaryCity
+        && viewer.militaryType == profile.militaryType
+        && (
+          (
+            profile.keys().hasAll(['militaryUnitId'])
+            && viewer.keys().hasAll(['militaryUnitId'])
+            && profile.militaryUnitId is string
+            && viewer.militaryUnitId is string
+            && profile.militaryUnitId == viewer.militaryUnitId
+          )
+          || (
+            (!profile.keys().hasAll(['militaryUnitId']) || profile.militaryUnitId == null)
+            && profile.militaryUnitName is string
+            && (
+              (viewer.keys().hasAll(['militaryUnitNameSnapshot']) && viewer.militaryUnitNameSnapshot == profile.militaryUnitName)
+              || viewer.militaryUnit == profile.militaryUnitName
+            )
+          )
+        );
+    }
+
+    function sharesCurrentGroup(uid, pointerCollection) {
+      let pointerPath = /databases/$(database)/documents/$(pointerCollection)/$(request.auth.uid);
+      return exists(pointerPath)
+        && isDevreGroupMember(get(pointerPath).data.groupId)
+        && exists(/databases/$(database)/documents/devreGroups/$(get(pointerPath).data.groupId)/members/$(uid));
+    }
+
+    function canReadPublicProfile(uid) {
+      return isOwnProfile(uid)
+        || (isSignedIn() && hasExactDevreAccess(resource.data))
+        || (isSignedIn() && sharesCurrentGroup(uid, '_devreGroupMemberships'))
+        || (isSignedIn() && sharesCurrentGroup(uid, '_travelGroupMemberships'));
     }
 
     function hasValidProfileShape(uid) {
@@ -64,6 +105,9 @@ service cloud.firestore {
           'militaryPeriodYear',
           'militaryPeriodMonth',
           'militaryUnit',
+          'militaryUnitId',
+          'militaryUnitNameSnapshot',
+          'forceCode',
           'reportingDate',
           'onboardingCompleted',
           'createdAt',
@@ -103,6 +147,21 @@ service cloud.firestore {
             && data.militaryUnit.size() >= 2
             && data.militaryUnit.size() <= 120
           )
+        )
+        && (
+          !('militaryUnitId' in data)
+          || data.militaryUnitId == null
+          || (data.militaryUnitId is string && data.militaryUnitId.size() >= 3 && data.militaryUnitId.size() <= 160)
+        )
+        && (
+          !('militaryUnitNameSnapshot' in data)
+          || data.militaryUnitNameSnapshot == null
+          || (data.militaryUnitNameSnapshot is string && data.militaryUnitNameSnapshot.size() >= 2 && data.militaryUnitNameSnapshot.size() <= 120)
+        )
+        && (
+          !('forceCode' in data)
+          || data.forceCode == null
+          || data.forceCode in ['land', 'air', 'navy', 'gendarmerie', 'coast_guard']
         )
         && data.reportingDate is string
         && data.reportingDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
@@ -295,6 +354,26 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function hasValidLegalAcceptanceShape() {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'termsAcceptedVersion',
+          'termsAcceptedAt',
+          'privacyNoticeAcknowledgedVersion',
+          'privacyNoticeAcknowledgedAt'
+        ])
+        && data.keys().hasOnly([
+          'termsAcceptedVersion',
+          'termsAcceptedAt',
+          'privacyNoticeAcknowledgedVersion',
+          'privacyNoticeAcknowledgedAt'
+        ])
+        && data.termsAcceptedVersion == '2026-08-20-v1'
+        && data.termsAcceptedAt is timestamp
+        && data.privacyNoticeAcknowledgedVersion == '2026-08-20-v1'
+        && data.privacyNoticeAcknowledgedAt is timestamp;
+    }
+
     function hasValidDevreGroupStateShape() {
       let data = request.resource.data;
       return data.keys().hasAll(['acknowledgedGroupId', 'createdAt', 'updatedAt'])
@@ -329,7 +408,7 @@ service cloud.firestore {
     }
 
     match /publicProfiles/{uid} {
-      allow read: if isSignedIn();
+      allow read: if canReadPublicProfile(uid);
       allow create, update, delete: if false;
     }
 
@@ -427,6 +506,16 @@ service cloud.firestore {
       allow delete: if isOwnProfile(uid) && preferenceId == 'main';
     }
 
+    match /users/{uid}/legal/{documentId} {
+      allow read: if isOwnProfile(uid) && documentId == 'acceptance';
+      allow create, update: if isOwnProfile(uid)
+        && documentId == 'acceptance'
+        && hasValidLegalAcceptanceShape()
+        && request.resource.data.termsAcceptedAt == request.time
+        && request.resource.data.privacyNoticeAcknowledgedAt == request.time;
+      allow delete: if false;
+    }
+
     match /users/{uid}/devreGroupState/{stateId} {
       allow read: if isOwnProfile(uid) && stateId == 'main';
       allow create: if isOwnProfile(uid)
@@ -442,6 +531,23 @@ service cloud.firestore {
       allow delete: if isOwnProfile(uid) && stateId == 'main';
     }
 
+    function isDirectParticipant(conversationId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/directConversations/$(conversationId))
+        && request.auth.uid in get(/databases/$(database)/documents/directConversations/$(conversationId)).data.participantUids;
+    }
+
+    function directOtherUid(conversationId) {
+      let participants = get(/databases/$(database)/documents/directConversations/$(conversationId)).data.participantUids;
+      return participants[0] == request.auth.uid ? participants[1] : participants[0];
+    }
+
+    function directMessagingAllowed(conversationId) {
+      let otherUid = directOtherUid(conversationId);
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)/blockedUsers/$(otherUid))
+        && !exists(/databases/$(database)/documents/users/$(otherUid)/blockedUsers/$(request.auth.uid));
+    }
+
     match /users/{uid}/hiddenGroupMessages/{groupId}/messages/{messageId} {
       allow read: if isOwnProfile(uid);
       allow create: if isOwnProfile(uid)
@@ -453,9 +559,208 @@ service cloud.firestore {
       allow delete: if isOwnProfile(uid);
     }
 
+    match /users/{uid}/hiddenDirectMessages/{conversationId}/messages/{messageId} {
+      allow read: if isOwnProfile(uid);
+      allow create: if isOwnProfile(uid)
+        && isDirectParticipant(conversationId)
+        && request.resource.data.keys().hasOnly(['conversationId', 'messageId', 'hiddenAt'])
+        && request.resource.data.conversationId == conversationId
+        && request.resource.data.messageId == messageId
+        && request.resource.data.hiddenAt == request.time;
+      allow update: if false;
+      allow delete: if isOwnProfile(uid);
+    }
+
     match /_devreGroupMemberships/{uid} {
       allow read: if isOwnProfile(uid);
       allow create, update, delete: if false;
+    }
+
+    match /_travelGroupMemberships/{uid} {
+      allow read: if isOwnProfile(uid);
+      allow create, update, delete: if false;
+    }
+
+    match /users/{uid}/blockedUsers/{blockedUid} {
+      allow read: if isOwnProfile(uid);
+      allow create: if isOwnProfile(uid)
+        && blockedUid != uid
+        && request.resource.data.keys().hasOnly(['blockedUid', 'createdAt'])
+        && request.resource.data.blockedUid == blockedUid
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+      allow delete: if isOwnProfile(uid);
+    }
+
+    match /moderationReports/{reportId} {
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'reporterUid', 'reportedUid', 'conversationType', 'conversationId', 'messageId', 'reason', 'status', 'createdAt'
+        ])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.reportedUid is string
+        && request.resource.data.reportedUid != request.auth.uid
+        && request.resource.data.conversationId is string
+        && (
+          (
+            request.resource.data.conversationType == 'direct'
+            && isDirectParticipant(request.resource.data.conversationId)
+            && request.resource.data.reportedUid in get(/databases/$(database)/documents/directConversations/$(request.resource.data.conversationId)).data.participantUids
+            && (request.resource.data.messageId == null || (
+              request.resource.data.messageId is string
+              && exists(/databases/$(database)/documents/directConversations/$(request.resource.data.conversationId)/messages/$(request.resource.data.messageId))
+              && get(/databases/$(database)/documents/directConversations/$(request.resource.data.conversationId)/messages/$(request.resource.data.messageId)).data.senderUid == request.resource.data.reportedUid
+            ))
+          )
+          || (
+            request.resource.data.conversationType == 'group'
+            && isDevreGroupMember(request.resource.data.conversationId)
+            && request.resource.data.messageId is string
+            && exists(/databases/$(database)/documents/devreGroups/$(request.resource.data.conversationId)/messages/$(request.resource.data.messageId))
+            && get(/databases/$(database)/documents/devreGroups/$(request.resource.data.conversationId)/messages/$(request.resource.data.messageId)).data.senderUid == request.resource.data.reportedUid
+          )
+        )
+        && request.resource.data.reason in ['Spam', 'Taciz / rahatsız etme', 'Uygunsuz içerik', 'Sahte / yanıltıcı profil', 'Diğer']
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if false;
+    }
+
+    match /directConversations/{conversationId} {
+      allow read: if isDirectParticipant(conversationId);
+      allow create, update, delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if isDirectParticipant(conversationId);
+        allow create: if isDirectParticipant(conversationId)
+          && directMessagingAllowed(conversationId)
+          && request.resource.data.id == messageId
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.clientCreatedAt is timestamp
+          && (
+            request.resource.data.replyToMessageId == null
+            || (
+              request.resource.data.replyToMessageId is string
+              && request.resource.data.replyToMessageId != messageId
+              && exists(/databases/$(database)/documents/directConversations/$(conversationId)/messages/$(request.resource.data.replyToMessageId))
+            )
+          )
+          && request.resource.data.schemaVersion == 1
+          && (
+            (
+              request.resource.data.type == 'text'
+              && request.resource.data.keys().hasOnly([
+                'id', 'senderUid', 'type', 'text', 'createdAt', 'clientCreatedAt', 'replyToMessageId', 'schemaVersion'
+              ])
+              && request.resource.data.text is string
+              && request.resource.data.text.size() > 0
+              && request.resource.data.text.size() <= 1500
+              && request.resource.data.text.matches('^\\S([\\s\\S]*\\S)?$')
+            )
+            || (
+              request.resource.data.type == 'image'
+              && request.resource.data.keys().hasOnly([
+                'id', 'senderUid', 'type', 'mediaPath', 'caption', 'width', 'height',
+                'createdAt', 'clientCreatedAt', 'replyToMessageId', 'schemaVersion'
+              ])
+              && request.resource.data.mediaPath == 'directConversations/' + conversationId + '/media/' + messageId + '/image.jpg'
+              && request.resource.data.caption is string
+              && request.resource.data.caption.size() <= 1500
+              && request.resource.data.width is int
+              && request.resource.data.height is int
+              && request.resource.data.width > 0
+              && request.resource.data.height > 0
+              && request.resource.data.width <= 1600
+              && request.resource.data.height <= 1600
+            )
+            || (
+              request.resource.data.type == 'document'
+              && request.resource.data.keys().hasOnly([
+                'id', 'senderUid', 'type', 'mediaPath', 'fileName', 'mimeType', 'sizeBytes', 'extension',
+                'createdAt', 'clientCreatedAt', 'replyToMessageId', 'schemaVersion'
+              ])
+              && request.resource.data.mediaPath == 'directConversations/' + conversationId + '/media/' + messageId + '/document'
+              && request.resource.data.fileName is string
+              && request.resource.data.fileName.size() > 0
+              && request.resource.data.fileName.size() <= 120
+              && request.resource.data.sizeBytes is int
+              && request.resource.data.sizeBytes > 0
+              && request.resource.data.sizeBytes <= 20 * 1024 * 1024
+              && (
+                (request.resource.data.extension == 'pdf' && request.resource.data.mimeType == 'application/pdf')
+                || (request.resource.data.extension == 'doc' && request.resource.data.mimeType == 'application/msword')
+                || (request.resource.data.extension == 'docx' && request.resource.data.mimeType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+                || (request.resource.data.extension == 'xls' && request.resource.data.mimeType == 'application/vnd.ms-excel')
+                || (request.resource.data.extension == 'xlsx' && request.resource.data.mimeType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                || (request.resource.data.extension == 'ppt' && request.resource.data.mimeType == 'application/vnd.ms-powerpoint')
+                || (request.resource.data.extension == 'pptx' && request.resource.data.mimeType == 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
+              )
+            )
+          );
+        allow update: if isDirectParticipant(conversationId)
+          && resource.data.senderUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedForEveryone', 'deletedAt', 'deletedBy'])
+          && resource.data.deletedForEveryone != true
+          && request.resource.data.deletedForEveryone == true
+          && request.resource.data.deletedAt == request.time
+          && request.resource.data.deletedBy == request.auth.uid;
+        allow delete: if false;
+      }
+
+      match /readCursors/{uid} {
+        allow read: if isDirectParticipant(conversationId);
+        allow create, update: if isDirectParticipant(conversationId)
+          && request.auth.uid == uid
+          && request.resource.data.uid == uid
+          && request.resource.data.lastReadMessageId is string
+          && request.resource.data.lastReadMessageCreatedAt is timestamp
+          && request.resource.data.lastReadAt == request.time;
+        allow delete: if request.auth.uid == uid;
+      }
+
+      match /participantStates/{uid} {
+        allow read: if isDirectParticipant(conversationId) && request.auth.uid == uid;
+        allow create: if isDirectParticipant(conversationId)
+          && request.auth.uid == uid
+          && request.resource.data.uid == uid
+          && request.resource.data.unreadCount == 0
+          && (
+            (
+              request.resource.data.keys().hasOnly(['uid', 'unreadCount', 'lastReadAt'])
+              && request.resource.data.lastReadAt == request.time
+            )
+            || (
+              request.resource.data.keys().hasOnly(['uid', 'unreadCount', 'hidden', 'hiddenAt'])
+              && request.resource.data.hidden == true
+              && request.resource.data.hiddenAt == request.time
+            )
+          );
+        allow update: if isDirectParticipant(conversationId)
+          && request.auth.uid == uid
+          && request.resource.data.uid == uid
+          && (
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCount', 'lastReadAt'])
+              && request.resource.data.unreadCount == 0
+              && request.resource.data.lastReadAt == request.time
+            )
+            || (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCount', 'hidden', 'hiddenAt'])
+              && request.resource.data.unreadCount == 0
+              && request.resource.data.hidden == true
+              && request.resource.data.hiddenAt == request.time
+            )
+          );
+        allow delete: if false;
+      }
+    }
+
+    // Owner-private collection-group read used by the bounded Conversations inbox.
+    // Message authorization continues to use the authoritative conversation and
+    // two-way block documents above; this state is presentation data only.
+    match /{conversationPath=**}/participantStates/{stateUid} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
     match /devreGroups/{groupId} {
@@ -463,6 +768,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
 
       match /members/{memberUid} {
+        allow read: if isDevreGroupMember(groupId);
+        allow create, update, delete: if false;
+      }
+
+      match /groupEvents/{eventId} {
         allow read: if isDevreGroupMember(groupId);
         allow create, update, delete: if false;
       }

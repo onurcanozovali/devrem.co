@@ -9,6 +9,18 @@ export type ReportingCountdown =
   | { state: 'past'; daysRemaining: 0 }
   | { state: 'unavailable'; daysRemaining: null };
 
+export function getTimeBasedGreeting(firstName: string, referenceDate = new Date()): string {
+  const hour = referenceDate.getHours();
+  const greeting = hour >= 5 && hour < 12
+    ? 'Günaydın'
+    : hour >= 12 && hour < 18
+      ? 'Tünaydın'
+      : hour >= 18 && hour < 22
+        ? 'İyi akşamlar'
+        : 'İyi geceler';
+  return `${greeting}, ${firstName}`;
+}
+
 function localCalendarDayNumber(date: Date): number {
   return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / MILLISECONDS_PER_DAY;
 }

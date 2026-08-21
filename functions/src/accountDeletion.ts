@@ -1,5 +1,6 @@
 export interface AccountDeletionDependencies {
-  deleteAvatar: (uid: string) => Promise<void>;
+  deleteOwnedMedia: (uid: string) => Promise<void>;
+  minimizeUserReferences: (uid: string) => Promise<void>;
   deleteNotificationData: (uid: string) => Promise<void>;
   deleteDevreGroupMembership: (uid: string) => Promise<void>;
   deletePublicProfile: (uid: string) => Promise<void>;
@@ -23,10 +24,11 @@ export async function deleteAccountData(
   uid: string,
   dependencies: AccountDeletionDependencies,
 ): Promise<void> {
-  await dependencies.deleteAvatar(uid);
+  await dependencies.deleteOwnedMedia(uid);
   await dependencies.deletePublicProfile(uid);
   await dependencies.deleteNotificationData(uid);
   await dependencies.deleteDevreGroupMembership(uid);
+  await dependencies.minimizeUserReferences(uid);
   await dependencies.deleteProfile(uid);
 
   try {

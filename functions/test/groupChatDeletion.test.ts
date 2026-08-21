@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { deletedGroupMessageMediaPath } from '../src/groupChatDeletion';
+import { deletedDirectMessageMediaPath, deletedGroupMessageMediaPath } from '../src/groupChatDeletion';
 
 test('soft deletion resolves only the sender-owned deterministic media path', () => {
   const groupId = `devre-v1-${'a'.repeat(64)}`;
@@ -25,5 +25,17 @@ test('text deletion never resolves a Storage artifact', () => {
     senderUid: 'user-1', type: 'text', text: 'hello',
   }, {
     senderUid: 'user-1', type: 'text', text: 'hello', deletedForEveryone: true, deletedBy: 'user-1',
+  }), null);
+});
+
+test('direct soft deletion only resolves deterministic image or document paths', () => {
+  const conversationId = `direct-v1-${'d'.repeat(64)}`;
+  const path = `directConversations/${conversationId}/media/message-1/document`;
+  const before = { senderUid: 'user-1', type: 'document', mediaPath: path };
+  assert.equal(deletedDirectMessageMediaPath(conversationId, 'message-1', before, {
+    ...before, deletedForEveryone: true, deletedBy: 'user-1',
+  }), path);
+  assert.equal(deletedDirectMessageMediaPath(conversationId, 'message-1', before, {
+    ...before, deletedForEveryone: true, deletedBy: 'user-2',
   }), null);
 });

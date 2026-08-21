@@ -19,7 +19,7 @@
       "blockedPermissions": ["android.permission.RECORD_AUDIO"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/branding/adaptive-icon-foreground-padded.png",
-        "backgroundColor": "#006440"
+        "backgroundColor": "#101613"
       }
     },
     "plugins": [
@@ -28,13 +28,13 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#006440",
-          "image": "./assets/branding/splash-brand-lockup.png",
-          "imageWidth": 340,
+          "backgroundColor": "#101613",
+          "image": "./assets/branding/adaptive-icon-foreground-padded.png",
+          "imageWidth": 200,
           "resizeMode": "contain",
           "dark": {
-            "backgroundColor": "#006440",
-            "image": "./assets/branding/splash-brand-lockup.png"
+            "backgroundColor": "#101613",
+            "image": "./assets/branding/adaptive-icon-foreground-padded.png"
           }
         }
       ],

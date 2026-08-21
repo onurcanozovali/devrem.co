@@ -17,6 +17,10 @@ export function getChatMediaPath(groupId: string, messageId: string, kind: ChatM
   return `devreGroups/${groupId}/media/${messageId}/${fileName}`;
 }
 
+export function getDirectChatMediaPath(conversationId: string, messageId: string, kind: Exclude<ChatMediaKind, 'audio'>): string {
+  return `directConversations/${conversationId}/media/${messageId}/${kind === 'image' ? 'image.jpg' : 'document'}`;
+}
+
 function getMediaReference(path: string) {
   return ref(getStorage(getFirebaseApp()), path);
 }
@@ -52,6 +56,27 @@ export async function uploadChatMedia(input: {
   }
 }
 
+export async function uploadDirectChatMedia(input: {
+  conversationId: string;
+  kind: 'image' | 'document';
+  localUri: string;
+  messageId: string;
+  senderUid: string;
+  document?: { extension: string; fileName: string; mimeType: string };
+}): Promise<string> {
+  const { conversationId, document, kind, localUri, messageId, senderUid } = input;
+  const mediaPath = getDirectChatMediaPath(conversationId, messageId, kind);
+  await putFile(getMediaReference(mediaPath), localUri, {
+    cacheControl: 'private,max-age=86400',
+    contentType: kind === 'image' ? 'image/jpeg' : document?.mimeType,
+    customMetadata: {
+      kind, messageId, senderUid,
+      ...(kind === 'document' && document ? { extension: document.extension, fileName: document.fileName } : {}),
+    },
+  });
+  return mediaPath;
+}
+
 export async function resolveChatMediaLocalUri(
   groupId: string,
   messageId: string,
@@ -62,6 +87,19 @@ export async function resolveChatMediaLocalUri(
   if (mediaPath !== getChatMediaPath(groupId, messageId, kind)) throw new Error('invalid-media-path');
   const suffix = kind === 'image' ? 'jpg' : kind === 'audio' ? 'm4a' : extension ?? 'bin';
   const file = new File(Paths.cache, `devrem-${groupId}-${messageId}-${kind}.${suffix}`);
+  if (!file.exists) await writeToFile(getMediaReference(mediaPath), file.uri);
+  return file.uri;
+}
+
+export async function resolveDirectChatMediaLocalUri(
+  conversationId: string,
+  messageId: string,
+  kind: 'image' | 'document',
+  mediaPath: string,
+  extension?: string,
+): Promise<string> {
+  if (mediaPath !== getDirectChatMediaPath(conversationId, messageId, kind)) throw new Error('invalid-media-path');
+  const file = new File(Paths.cache, `devrem-direct-${conversationId}-${messageId}.${kind === 'image' ? 'jpg' : extension ?? 'bin'}`);
   if (!file.exists) await writeToFile(getMediaReference(mediaPath), file.uri);
   return file.uri;
 }

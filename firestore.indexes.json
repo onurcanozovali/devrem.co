@@ -1,11 +1,30 @@
 {
   "indexes": [
     {
+      "collectionGroup": "publicProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "militaryPeriodYear", "order": "ASCENDING" },
+        { "fieldPath": "militaryPeriodMonth", "order": "ASCENDING" },
+        { "fieldPath": "militaryCity", "order": "ASCENDING" },
+        { "fieldPath": "militaryType", "order": "ASCENDING" },
+        { "fieldPath": "militaryUnitId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "messages",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "type", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "directConversations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participantUids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "lastMessageAt", "order": "DESCENDING" }
       ]
     }
   ],

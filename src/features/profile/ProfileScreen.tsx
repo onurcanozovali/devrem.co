@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActionSheetIOS, Alert, Platform, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { ScreenContainer } from '@/components/common/ScreenContainer';
@@ -8,6 +8,8 @@ import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { DevremActionSheet } from '@/components/ui/DevremActionSheet';
+import { DevremConfirmModal } from '@/components/ui/DevremConfirmModal';
 import { getProvinceName } from '@/data/turkeyProvinces';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { mapAuthError } from '@/features/auth/services/authErrors';
@@ -16,6 +18,7 @@ import { ProfileEditModal } from './components/ProfileEditModal';
 import { AccountDeletionModal } from './components/AccountDeletionModal';
 import { ThemeSettingsCard } from './components/ThemeSettingsCard';
 import { CommunicationPreferenceCard } from './components/CommunicationPreferenceCard';
+import { LegalSettingsCard } from './components/LegalSettingsCard';
 import { useProfile } from './hooks/useProfile';
 import { useProfilePhotoURL } from './hooks/useProfilePhotoURL';
 import { militaryTypeLabels, monthLabels } from './profileOptions';
@@ -45,6 +48,9 @@ export function ProfileScreen() {
   const [isPhotoWorking, setIsPhotoWorking] = useState(false);
   const [photoProgress, setPhotoProgress] = useState(0);
   const [localPhotoURL, setLocalPhotoURL] = useState<string | null>(null);
+  const [photoActionsOpen, setPhotoActionsOpen] = useState(false);
+  const [removePhotoConfirmOpen, setRemovePhotoConfirmOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const remotePhotoURL = useProfilePhotoURL(
     profile?.uid ?? '',
     profile?.photoPath ?? null,
@@ -99,45 +105,13 @@ export function ProfileScreen() {
   };
 
   const confirmRemovePhoto = () => {
-    Alert.alert(
-      'Profil fotoğrafını kaldır',
-      'Profil fotoğrafın kaldırılacak. Daha sonra yeniden ekleyebilirsin.',
-      [
-        { text: 'Vazgeç', style: 'cancel' },
-        { text: 'Fotoğrafı kaldır', style: 'destructive', onPress: () => void handleRemovePhoto() },
-      ],
-    );
+    setPhotoActionsOpen(false);
+    setRemovePhotoConfirmOpen(true);
   };
 
   const showPhotoActions = () => {
     if (isPhotoWorking) return;
-    const hasPhoto = profile?.photoPath !== null;
-    if (Platform.OS === 'ios') {
-      const options = hasPhoto
-        ? ['Fotoğraf seç', 'Fotoğrafı kaldır', 'Vazgeç']
-        : ['Fotoğraf seç', 'Vazgeç'];
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options,
-          cancelButtonIndex: options.length - 1,
-          destructiveButtonIndex: hasPhoto ? 1 : undefined,
-          title: 'Profil fotoğrafı',
-        },
-        (index) => {
-          if (index === 0) void handleSelectPhoto();
-          if (hasPhoto && index === 1) confirmRemovePhoto();
-        },
-      );
-      return;
-    }
-
-    Alert.alert('Profil fotoğrafı', undefined, [
-      { text: 'Fotoğraf seç', onPress: () => void handleSelectPhoto() },
-      ...(hasPhoto
-        ? [{ text: 'Fotoğrafı kaldır', style: 'destructive' as const, onPress: confirmRemovePhoto }]
-        : []),
-      { text: 'Vazgeç', style: 'cancel' },
-    ]);
+    setPhotoActionsOpen(true);
   };
 
   if (!profile) {
@@ -236,18 +210,19 @@ export function ProfileScreen() {
           value={monthLabels[profile.militaryPeriodMonth - 1] ?? String(profile.militaryPeriodMonth)}
         />
         <ProfileDetail label="Gideceği şehir" value={getProvinceName(profile.militaryCity)} />
-        <ProfileDetail label="Birlik" value={profile.militaryUnit ?? 'Henüz belirtilmedi'} />
+        <ProfileDetail label="Birlik" value={profile.militaryUnitNameSnapshot ?? profile.militaryUnit ?? 'Henüz belirtilmedi'} />
         <ProfileDetail label="Teslim tarihi" value={formatStoredDate(profile.reportingDate)} />
       </Card>
 
       <ThemeSettingsCard />
       <CommunicationPreferenceCard />
+      <LegalSettingsCard />
 
       <Card style={{ gap: spacing.md }}>
         <AppText variant="subtitle" weight="700">Hesap</AppText>
         <AppText color="muted">Telefon numaran Firebase Authentication tarafından yönetilir ve profil belgesine kopyalanmaz.</AppText>
         {error ? <AppText color="danger" variant="caption" accessibilityLiveRegion="polite">{error}</AppText> : null}
-        <Button label="Çıkış yap" loading={isLoggingOut} onPress={handleLogout} />
+        <Button label="Çıkış yap" loading={isLoggingOut} onPress={() => setLogoutConfirmOpen(true)} />
         <View style={{ backgroundColor: colors.divider, height: 1, marginVertical: spacing.sm }} />
         <Pressable
           accessibilityRole="button"
@@ -283,6 +258,36 @@ export function ProfileScreen() {
           onClose={() => setIsDeletingAccount(false)}
         />
       ) : null}
+
+      <DevremActionSheet
+        actions={[
+          { icon: 'image-outline', label: 'Fotoğraf seç', onPress: () => void handleSelectPhoto() },
+          ...(profile.photoPath !== null ? [{ destructive: true, icon: 'trash-outline' as const, label: 'Fotoğrafı kaldır', onPress: confirmRemovePhoto }] : []),
+        ]}
+        onClose={() => setPhotoActionsOpen(false)}
+        title="Profil fotoğrafı"
+        visible={photoActionsOpen}
+      />
+      <DevremConfirmModal
+        confirmLabel="Fotoğrafı kaldır"
+        description="Profil fotoğrafın kaldırılacak. Daha sonra yeniden ekleyebilirsin."
+        destructive
+        loading={isPhotoWorking}
+        onClose={() => setRemovePhotoConfirmOpen(false)}
+        onConfirm={() => void handleRemovePhoto().then(() => setRemovePhotoConfirmOpen(false))}
+        title="Profil fotoğrafını kaldır"
+        visible={removePhotoConfirmOpen}
+      />
+      <DevremConfirmModal
+        confirmLabel="Çıkış yap"
+        description="Devrem hesabındaki açık oturum bu cihazda kapatılacak."
+        error={error}
+        loading={isLoggingOut}
+        onClose={() => setLogoutConfirmOpen(false)}
+        onConfirm={() => void handleLogout()}
+        title="Çıkış yapılsın mı?"
+        visible={logoutConfirmOpen}
+      />
 
     </ScreenContainer>
   );

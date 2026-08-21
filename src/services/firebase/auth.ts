@@ -32,9 +32,10 @@ export async function requestPhoneVerification(phoneNumber: string): Promise<Con
   }
 }
 
-export async function confirmPhoneVerification(result: ConfirmationResult, code: string): Promise<void> {
+export async function confirmPhoneVerification(result: ConfirmationResult, code: string): Promise<string> {
   try {
-    await result.confirm(code);
+    const credential = await result.confirm(code);
+    return credential.user.uid;
   } catch (error: unknown) {
     throw mapAuthError(error);
   }

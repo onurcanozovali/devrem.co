@@ -20,8 +20,8 @@ if (projectId !== developmentProjectId) {
 if (action !== 'seed' && action !== 'burst' && action !== 'clear') {
   throw new Error('Expected seed, burst, or clear action.');
 }
-if (!groupId || !/^devre-v1-[a-f0-9]{64}$/.test(groupId)) {
-  throw new Error('Supply an exact Devre group with --group devre-v1-<64 hex characters>.');
+if (!groupId || !/^(devre|travel)-v1-[a-f0-9]{64}$/.test(groupId)) {
+  throw new Error('Supply an active group with --group <devre|travel>-v1-<64 hex characters>.');
 }
 if (action === 'seed' && requestedCount !== 10 && requestedCount !== 60 && requestedCount !== 200) {
   throw new Error('--count must be 10, 60, or 200.');

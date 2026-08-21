@@ -23,4 +23,8 @@ export type NotificationTarget = {
   eventId: string;
   groupId: string;
   target: 'groupChat';
+} | {
+  conversationId: string;
+  eventId: string;
+  target: 'directChat';
 };

@@ -51,7 +51,7 @@ export function ChatCameraModal({ onClose, onPhoto, visible }: {
         <View style={{ alignItems: 'center', flex: 1, gap: spacing.md, justifyContent: 'center', padding: spacing.xl }}>
           <Ionicons color="#fff" name="camera-outline" size={48} />
           <AppText style={{ color: '#fff', textAlign: 'center' }} variant="subtitle" weight="800">Kamera izni gerekli</AppText>
-          <AppText style={{ color: '#ccc', textAlign: 'center' }}>Devre grubunda fotoğraf çekmek için kamera iznini açmalısın.</AppText>
+          <AppText style={{ color: '#ccc', textAlign: 'center' }}>Sohbette fotoğraf paylaşmak için kamera iznini açmalısın.</AppText>
           <Pressable onPress={() => permission.canAskAgain ? void requestPermission() : void Linking.openSettings()} style={{ backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: spacing.lg, paddingVertical: spacing.md }}><AppText style={{ color: colors.textInverse }} weight="800">{permission.canAskAgain ? 'İzin Ver' : 'Ayarları Aç'}</AppText></Pressable>
           <Pressable onPress={onClose}><AppText style={{ color: '#fff' }}>Vazgeç</AppText></Pressable>
         </View>

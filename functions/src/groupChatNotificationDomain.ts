@@ -100,11 +100,15 @@ export function createGroupMessageDeliveryId(
     .digest('hex');
 }
 
-export function createGroupMessageNotificationCopy(senderName: string, message: GroupChatMessageData) {
+export function createGroupMessageNotificationCopy(
+  senderName: string,
+  message: GroupChatMessageData,
+  groupLabel = 'Devre Grubu',
+) {
   const normalizedName = senderName.trim() || 'Bir devren';
   const normalizedText = message.text?.replace(/\s+/g, ' ').trim() ?? '';
   return {
-    title: `${normalizedName} • Devre Grubu`,
+    title: `${normalizedName} • ${groupLabel}`,
     body: message.type === 'audio' ? '🎤 Sesli mesaj'
       : message.type === 'document' ? `📄 ${message.fileName}`
         : message.type === 'image' && !normalizedText ? '📷 Fotoğraf'

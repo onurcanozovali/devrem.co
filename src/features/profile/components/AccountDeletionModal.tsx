@@ -142,7 +142,7 @@ export function AccountDeletionModal({ visible, onClose }: AccountDeletionModalP
                 Bu işlem kalıcıdır
               </AppText>
               <AppText color="muted" style={{ textAlign: 'center' }}>
-                Profilin, hazırlık listen ve hesabına ait tüm veriler kalıcı olarak silinir. Bu işlem geri alınamaz.
+                Hesabın, profilin, hazırlık listen, cihaz kayıtların ve yüklediğin sohbet medyaları silinir. Sohbet geçmişinde isimsizleştirilmiş mesaj referansları ile güvenlik ve moderasyon kayıtları korunabilir. Bu işlem geri alınamaz.
               </AppText>
             </View>
             <View style={{ gap: spacing.md }}>

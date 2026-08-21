@@ -4,7 +4,7 @@ export const DEVRE_CHAT_AUDIO_MAX_DURATION_MS = 3 * 60 * 1000;
 export const DEVRE_CHAT_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
 
 export type DevreChatMessageStatus = 'pending' | 'sent' | 'failed';
-export type DevreChatMessageType = 'text' | 'image' | 'audio' | 'document';
+export type DevreChatMessageType = 'text' | 'image' | 'audio' | 'document' | 'system';
 
 interface DevreChatMessageBase {
   id: string;
@@ -24,6 +24,7 @@ export function getDevreChatMessagePreview(message: DevreChatMessage): string {
   if (message.type === 'text') return collapseDevreChatText(message.text) ?? message.text;
   if (message.type === 'image') return message.caption || 'Fotoğraf';
   if (message.type === 'audio') return 'Sesli mesaj';
+  if (message.type === 'system') return message.text;
   return message.fileName;
 }
 
@@ -32,6 +33,7 @@ export type DevreChatMessage = DevreChatMessageBase & (
   | { type: 'image'; caption: string; mediaPath: string; width: number; height: number }
   | { type: 'audio'; mediaPath: string; durationMillis: number }
   | { type: 'document'; mediaPath: string; fileName: string; mimeType: string; sizeBytes: number; extension: DevreChatDocumentExtension }
+  | { type: 'system'; text: string }
 );
 
 export const devreChatDocumentExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'] as const;

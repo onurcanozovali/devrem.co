@@ -1,4 +1,6 @@
 import { isProvinceCode, type ProvinceCode } from '@/data/turkeyProvinces';
+import { getMilitaryUnitById } from '@/features/militaryUnits/catalog';
+import type { ForceCode } from '@/features/militaryUnits/types';
 import { militaryTypes, type CompleteUserProfileInput, type MilitaryType, type UserProfile } from '../types/profile';
 import {
   isMilitaryPeriodCurrentOrFuture,
@@ -40,6 +42,8 @@ export interface ProfileFormValues {
   militaryMonth: number | null;
   knowsMilitaryUnit: boolean;
   militaryUnit: string;
+  militaryUnitId: string | null;
+  forceCode: ForceCode | null;
   reportingDate: string | null;
 }
 
@@ -67,6 +71,8 @@ export function createProfileFormValues(profile?: UserProfile): ProfileFormValue
     militaryMonth: profile?.militaryPeriodMonth ?? null,
     knowsMilitaryUnit: profile?.militaryUnit !== null && profile?.militaryUnit !== undefined,
     militaryUnit: profile?.militaryUnit ?? '',
+    militaryUnitId: profile?.militaryUnitId ?? null,
+    forceCode: profile?.forceCode ?? null,
     reportingDate: profile?.reportingDate ?? null,
   };
 }
@@ -110,7 +116,10 @@ export function validateProfileForm(
   ) errors.militaryMonth = 'Geçmiş bir celp dönemi seçilemez.';
 
   const normalizedUnit = values.knowsMilitaryUnit ? normalizeWhitespace(values.militaryUnit) : null;
-  if (values.knowsMilitaryUnit && !isValidMilitaryUnit(normalizedUnit)) {
+  const canonicalUnit = getMilitaryUnitById(values.militaryUnitId);
+  if (values.militaryUnitId && (!canonicalUnit || canonicalUnit.cityCode !== values.militaryCity)) {
+    errors.militaryUnit = 'Seçtiğin birlik görev şehriyle eşleşmiyor.';
+  } else if (values.knowsMilitaryUnit && !canonicalUnit && !isValidMilitaryUnit(normalizedUnit)) {
     errors.militaryUnit = `Birlik adı ${profileFieldLimits.militaryUnitMin}-${profileFieldLimits.militaryUnitMax} karakter olmalı.`;
   }
 
@@ -154,6 +163,9 @@ export function validateProfileForm(
       militaryPeriodYear: values.militaryYear as number,
       militaryPeriodMonth: values.militaryMonth as number,
       militaryUnit: normalizedUnit,
+      militaryUnitId: canonicalUnit?.id ?? null,
+      militaryUnitNameSnapshot: canonicalUnit?.name ?? normalizedUnit,
+      forceCode: canonicalUnit?.forceCode ?? null,
       reportingDate: values.reportingDate as string,
     },
   };
@@ -173,5 +185,7 @@ export function isProfileFormDirty(values: ProfileFormValues, profile: UserProfi
     || input.militaryPeriodYear !== profile.militaryPeriodYear
     || input.militaryPeriodMonth !== profile.militaryPeriodMonth
     || input.militaryUnit !== profile.militaryUnit
+    || input.militaryUnitId !== profile.militaryUnitId
+    || input.forceCode !== profile.forceCode
     || input.reportingDate !== profile.reportingDate;
 }

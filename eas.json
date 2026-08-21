@@ -13,7 +13,13 @@
       "environment": "preview"
     },
     "production": {
-      "environment": "production"
+      "autoIncrement": true,
+      "distribution": "store",
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "devrem-d985b"
+      }
     }
   }
 }

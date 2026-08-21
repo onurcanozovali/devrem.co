@@ -1,13 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, LayoutAnimation, Pressable, StyleSheet, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { LayoutAnimation, Pressable, StyleSheet, View } from 'react-native';
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { LoadingState } from '@/components/common/LoadingState';
+import { MainTabHeader } from '@/components/common/MainTabHeader';
 import { ScreenContainer } from '@/components/common/ScreenContainer';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { DevremConfirmModal } from '@/components/ui/DevremConfirmModal';
+import { CampaignPlacement } from '@/features/campaigns/CampaignPlacement';
+import { createCampaignContext } from '@/features/campaigns/campaignDomain';
+import { useProfile } from '@/features/profile/hooks/useProfile';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
   PreparationItemFormModal,
@@ -26,13 +32,14 @@ interface FormState {
 
 export function PreparationScreen() {
   const { colors, radii, spacing } = useTheme();
+  const { profile } = useProfile();
   const {
     status,
     items,
     state,
     error,
     actionError,
-    startPreparation,
+    activatePreparation,
     retryPreparation,
     addItem,
     editItem,
@@ -48,17 +55,21 @@ export function PreparationScreen() {
   const [formState, setFormState] = useState<FormState | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<PreparationItem | null>(null);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
 
-  useEffect(() => {
-    void startPreparation();
-  }, [startPreparation]);
+  useFocusEffect(useCallback(() => activatePreparation(), [activatePreparation]));
 
-  const itemsByCategory = useMemo(() => new Map(
-    PREPARATION_CATEGORIES.map((category) => [
-      category.id,
-      items.filter((item) => item.category === category.id),
-    ]),
-  ), [items]);
+  const sections = useMemo(() => {
+    const defaultSections = PREPARATION_CATEGORIES.map((category) => ({
+      ...category,
+      items: items.filter((item) => item.source === 'default' && item.category === category.id),
+    })).filter((section) => section.items.length > 0);
+    const customItems = items.filter((item) => item.source === 'custom');
+    return customItems.length > 0
+      ? [...defaultSections, { id: 'custom', label: 'Benim Eklediklerim', shortDescription: 'Kendi oluşturduğun görevler', items: customItems }]
+      : defaultSections;
+  }, [items]);
 
   const closeItemActions = useCallback(() => setActionsItemId(null), []);
 
@@ -74,25 +85,20 @@ export function PreparationScreen() {
 
   const requestDelete = useCallback((item: PreparationItem) => {
     setActionsItemId(null);
-    const description = item.source === 'default'
-      ? 'Bu varsayılan görev listenden kaldırılır. İstersen daha sonra eksik varsayılanları geri yükleyebilirsin.'
-      : 'Bu görev hazırlık listenden kaldırılır.';
-    Alert.alert('Görev silinsin mi?', description, [
-      { text: 'Vazgeç', style: 'cancel' },
-      {
-        text: 'Sil',
-        style: 'destructive',
-        onPress: () => {
-          LayoutAnimation.configureNext({
-            duration: 180,
-            update: { type: LayoutAnimation.Types.easeInEaseOut },
-            delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-          });
-          void deleteItem(item).catch(() => undefined);
-        },
-      },
-    ]);
-  }, [deleteItem]);
+    setDeleteConfirmItem(item);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteConfirmItem) return;
+    const item = deleteConfirmItem;
+    setDeleteConfirmItem(null);
+    LayoutAnimation.configureNext({
+      duration: 180,
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    });
+    void deleteItem(item).catch(() => undefined);
+  }, [deleteConfirmItem, deleteItem]);
 
   const togglePreparationItem = useCallback((itemId: string) => {
     setActionsItemId(null);
@@ -124,14 +130,7 @@ export function PreparationScreen() {
   };
 
   const confirmRestore = () => {
-    Alert.alert(
-      'Eksik varsayılanlar geri yüklensin mi?',
-      'Sildiğin varsayılan görevler yeniden eklenir. Kendi eklediğin ve düzenlediğin görevler silinmez.',
-      [
-        { text: 'Vazgeç', style: 'cancel' },
-        { text: 'Geri yükle', onPress: () => void runRestore() },
-      ],
-    );
+    setRestoreConfirmOpen(true);
   };
 
   if (status === 'loading' || status === 'idle') {
@@ -159,12 +158,7 @@ export function PreparationScreen() {
     <>
       <ScreenContainer contentContainerStyle={{ paddingBottom: spacing.xxl }} onScrollBeginDrag={closeItemActions}>
         <Pressable accessible={false} onPress={closeItemActions} style={{ gap: spacing.lg }}>
-        <View style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.md }}>
-          <View style={{ flex: 1 }}>
-            <AppText variant="title" weight="800">Hazırlık</AppText>
-            <AppText color="muted">Kişisel hazırlık planın</AppText>
-          </View>
-          <Pressable
+        <MainTabHeader title="Hazırlık" subtitle="Kişisel hazırlık planın" action={<Pressable
             accessibilityRole="button"
             accessibilityLabel="Görev ekle"
             onPress={() => setFormState({ mode: 'create', item: null })}
@@ -180,8 +174,7 @@ export function PreparationScreen() {
           >
             <Ionicons name="add" size={21} color={colors.textInverse} />
             <AppText weight="700" style={{ color: colors.textInverse }}>Görev ekle</AppText>
-          </Pressable>
-        </View>
+          </Pressable>} />
 
         <Card accessibilityLabel={`Hazırlığın yüzde ${summary.percentage} tamamlandı. ${summary.completed} / ${summary.total} görev tamamlandı.`}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm }}>
@@ -202,6 +195,18 @@ export function PreparationScreen() {
             {summary.isEmpty ? 'Yeni bir görev ekleyerek planını oluşturabilirsin.' : `${summary.completed} görev tamamlandı, ${summary.total - summary.completed} görev kaldı.`}
           </AppText>
         </Card>
+
+        <CampaignPlacement
+          placement="preparation_inline_offer"
+          context={createCampaignContext('preparation_inline_offer', {
+            militaryCityId: profile?.militaryCity,
+            militaryUnitId: profile?.militaryUnitId,
+            forceCode: profile?.forceCode,
+            militaryType: profile?.militaryType,
+            conscriptionPeriodYear: profile?.militaryPeriodYear,
+            conscriptionPeriodMonth: profile?.militaryPeriodMonth,
+          })}
+        />
 
         {!state?.longPressHintDismissed && !summary.isEmpty ? (
           <View style={{
@@ -244,9 +249,8 @@ export function PreparationScreen() {
           </Card>
         ) : (
           <View style={{ gap: spacing.md }}>
-            {PREPARATION_CATEGORIES.map((category) => {
-              const categoryItems = itemsByCategory.get(category.id) ?? [];
-              if (categoryItems.length === 0) return null;
+            {sections.map((category) => {
+              const categoryItems = category.items;
               const categoryCompleted = categoryItems.filter((item) => item.completed).length;
               const collapsed = collapsedCategories.has(category.id);
               return (
@@ -286,6 +290,18 @@ export function PreparationScreen() {
                     <AppText color="muted" weight="700">{categoryCompleted} / {categoryItems.length}</AppText>
                     <Ionicons name={collapsed ? 'chevron-down' : 'chevron-up'} size={20} color={colors.textMuted} />
                   </Pressable>
+                  <CampaignPlacement
+                    placement="preparation_category_offer"
+                    context={createCampaignContext('preparation_category_offer', {
+                      militaryCityId: profile?.militaryCity,
+                      militaryUnitId: profile?.militaryUnitId,
+                      forceCode: profile?.forceCode,
+                      militaryType: profile?.militaryType,
+                      conscriptionPeriodYear: profile?.militaryPeriodYear,
+                      conscriptionPeriodMonth: profile?.militaryPeriodMonth,
+                      preparationCategory: category.id,
+                    })}
+                  />
                   {!collapsed ? (
                     <View style={{ borderTopColor: colors.divider, borderTopWidth: 1 }}>
                       {categoryItems.map((item, index) => (
@@ -336,6 +352,26 @@ export function PreparationScreen() {
           onSubmit={submitForm}
         />
       ) : null}
+      <DevremConfirmModal
+        confirmLabel="Sil"
+        description={deleteConfirmItem?.source === 'default'
+          ? 'Bu varsayılan görev listenden kaldırılır. İstersen daha sonra eksik varsayılanları geri yükleyebilirsin.'
+          : 'Bu görev hazırlık listenden kaldırılır.'}
+        destructive
+        onClose={() => setDeleteConfirmItem(null)}
+        onConfirm={confirmDelete}
+        title="Görev silinsin mi?"
+        visible={deleteConfirmItem !== null}
+      />
+      <DevremConfirmModal
+        confirmLabel="Geri yükle"
+        description="Sildiğin varsayılan görevler yeniden eklenir. Kendi eklediğin ve düzenlediğin görevler silinmez."
+        loading={restoring}
+        onClose={() => setRestoreConfirmOpen(false)}
+        onConfirm={() => { setRestoreConfirmOpen(false); void runRestore(); }}
+        title="Eksik varsayılanlar geri yüklensin mi?"
+        visible={restoreConfirmOpen}
+      />
     </>
   );
 }

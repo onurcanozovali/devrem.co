@@ -1,5 +1,6 @@
 import { getProvinceName, isProvinceCode } from '@/data/turkeyProvinces';
 import { hasExactDevreIdentity } from '@devrem/devre-domain';
+import { forceCodes, type ForceCode } from '@/features/militaryUnits/types';
 import { isValidProfilePhotoPath } from '@/features/profile/services/profilePhotoDomain';
 import {
   isValidMilitaryPeriod,
@@ -17,6 +18,7 @@ import type {
 
 const publicProfileFields = [
   'firstName',
+  'lastName',
   'residenceCity',
   'departureCity',
   'militaryCity',
@@ -25,9 +27,13 @@ const publicProfileFields = [
   'militaryType',
   'militaryUnitId',
   'militaryUnitName',
+  'forceCode',
   'photoPath',
   'updatedAt',
 ] as const;
+
+const previousPublicProfileFields = publicProfileFields.filter((field) => field !== 'lastName');
+const preForcePublicProfileFields = previousPublicProfileFields.filter((field) => field !== 'forceCode');
 
 const legacyPublicProfileFields = [
   'firstName',
@@ -56,15 +62,25 @@ function isMilitaryType(value: unknown): value is MilitaryType {
   return typeof value === 'string' && militaryTypes.some((type) => type === value);
 }
 
+function isForceCode(value: unknown): value is ForceCode {
+  return typeof value === 'string' && forceCodes.some((code) => code === value);
+}
+
 export function parsePublicProfileData(userId: string, value: unknown): PublicProfile | null {
   if (!userId || !isRecord(value)) return null;
   const isCurrentShape = hasOnlyFields(value, publicProfileFields);
+  const isPreviousShape = hasOnlyFields(value, previousPublicProfileFields);
+  const isPreForceShape = hasOnlyFields(value, preForcePublicProfileFields);
   const isLegacyShape = hasOnlyFields(value, legacyPublicProfileFields);
-  if (!isCurrentShape && !isLegacyShape) return null;
-  const militaryUnitId = isCurrentShape ? value.militaryUnitId : null;
-  const militaryUnitName = isCurrentShape ? value.militaryUnitName : value.militaryUnit;
+  if (!isCurrentShape && !isPreviousShape && !isPreForceShape && !isLegacyShape) return null;
+  const hasCanonicalUnitShape = isCurrentShape || isPreviousShape || isPreForceShape;
+  const militaryUnitId = hasCanonicalUnitShape ? value.militaryUnitId : null;
+  const militaryUnitName = hasCanonicalUnitShape ? value.militaryUnitName : value.militaryUnit;
+  const forceCode = isCurrentShape || isPreviousShape ? value.forceCode : null;
+  const lastName = isCurrentShape && typeof value.lastName === 'string' ? normalizeWhitespace(value.lastName) : null;
   if (
     !isValidName(value.firstName)
+    || !(lastName === null || isValidName(lastName))
     || !isProvinceCode(value.residenceCity)
     || !isProvinceCode(value.departureCity)
     || !isProvinceCode(value.militaryCity)
@@ -72,6 +88,7 @@ export function parsePublicProfileData(userId: string, value: unknown): PublicPr
     || !isMilitaryType(value.militaryType)
     || !(militaryUnitId === null || (typeof militaryUnitId === 'string' && normalizeWhitespace(militaryUnitId).length > 0))
     || !isValidOptionalMilitaryUnit(militaryUnitName)
+    || !(forceCode === null || isForceCode(forceCode))
     || !isValidProfilePhotoPath(userId, value.photoPath)
     || !(value.updatedAt instanceof Date)
   ) return null;
@@ -79,6 +96,7 @@ export function parsePublicProfileData(userId: string, value: unknown): PublicPr
   return {
     userId,
     firstName: normalizeWhitespace(value.firstName),
+    lastName,
     residenceCity: value.residenceCity,
     departureCity: value.departureCity,
     militaryCity: value.militaryCity,
@@ -87,6 +105,7 @@ export function parsePublicProfileData(userId: string, value: unknown): PublicPr
     militaryType: value.militaryType,
     militaryUnitId: militaryUnitId === null ? null : normalizeWhitespace(militaryUnitId as string),
     militaryUnitName: militaryUnitName === null ? null : normalizeWhitespace(militaryUnitName as string),
+    forceCode,
     photoPath: value.photoPath,
     updatedAt: value.updatedAt,
   };
@@ -124,9 +143,21 @@ export function filterAndRankPublicProfiles(
       const scoreDifference = getDiscoveryRelevanceScore(reference, right)
         - getDiscoveryRelevanceScore(reference, left);
       if (scoreDifference !== 0) return scoreDifference;
-      const nameDifference = left.firstName.localeCompare(right.firstName, 'tr-TR');
+      const nameDifference = getPublicProfileDisplayName(left).localeCompare(getPublicProfileDisplayName(right), 'tr-TR');
       return nameDifference !== 0 ? nameDifference : left.userId.localeCompare(right.userId);
     });
+}
+
+export function getPublicProfileDisplayName(profile: Pick<PublicProfile, 'firstName' | 'lastName'>): string {
+  return normalizeWhitespace([profile.firstName, profile.lastName ?? ''].filter(Boolean).join(' '));
+}
+
+export function matchesDiscoveryNameSearch(
+  profile: Pick<PublicProfile, 'firstName' | 'lastName'>,
+  searchText: string,
+): boolean {
+  const query = normalizeWhitespace(searchText).toLocaleLowerCase('tr-TR');
+  return query.length === 0 || getPublicProfileDisplayName(profile).toLocaleLowerCase('tr-TR').includes(query);
 }
 
 export function getDiscoverySegmentOptions(

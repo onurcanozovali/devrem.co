@@ -9,6 +9,8 @@
   "scripts": {
     "backfill:public-profiles": "pnpm run build && node lib/runPublicProfileBackfill.js",
     "backfill:devre-groups": "pnpm run build && node lib/runDevreGroupBackfill.js",
+    "backfill:military-units": "pnpm run build && node lib/runMilitaryUnitBackfill.js",
+    "audit:devre-memberships": "pnpm run build && node lib/runMembershipAudit.js",
     "baseline:discovery-notifications": "pnpm run build && node lib/runNotificationBaseline.js",
     "test:push": "pnpm run build && node lib/runPushSmokeTest.js",
     "seed:discovery:clear": "pnpm run build && node lib/runDiscoverySeed.js clear",

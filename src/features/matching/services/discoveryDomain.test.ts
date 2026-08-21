@@ -11,8 +11,20 @@ import {
   getDiscoveryRelevanceScore,
   getDiscoverySegmentOptions,
   getMatchReasonBadges,
+  getPublicProfileDisplayName,
+  matchesDiscoveryNameSearch,
   parsePublicProfileData,
 } from './discoveryDomain';
+import {
+  DISCOVERY_PAGE_SIZE,
+  appendUniqueDiscoveryPage,
+  canLoadNextDiscoveryPage,
+  createDiscoveryPageRequest,
+  excludeBlockedDiscoveryProfiles,
+  getDiscoveryQueryKey,
+  hasMoreDiscoveryPages,
+  shouldResetDiscoveryPagination,
+} from './discoveryPagination';
 
 const reference = {
   userId: 'current-user',
@@ -24,12 +36,14 @@ const reference = {
   militaryType: 'standard' as const,
   militaryUnitId: null,
   militaryUnitName: '1. Piyade Tugayı',
+  forceCode: null,
 };
 
 function createProfile(overrides: Partial<PublicProfile> = {}): PublicProfile {
   return {
     userId: 'candidate-1',
     firstName: 'Mehmet',
+    lastName: 'Yılmaz',
     residenceCity: 35,
     departureCity: 35,
     militaryCity: 34,
@@ -41,6 +55,7 @@ function createProfile(overrides: Partial<PublicProfile> = {}): PublicProfile {
     photoPath: null,
     updatedAt: new Date('2026-08-09T00:00:00.000Z'),
     ...overrides,
+    forceCode: overrides.forceCode ?? null,
   };
 }
 
@@ -48,12 +63,18 @@ test('public projection accepts current and legacy discovery-safe unit fields', 
   const profile = createProfile();
   const { userId, ...document } = profile;
   assert.deepEqual(parsePublicProfileData(userId, document), profile);
-  const { militaryUnitId: _unitId, militaryUnitName, ...legacyDocument } = document;
+  const {
+    lastName: _lastName,
+    militaryUnitId: _unitId,
+    militaryUnitName,
+    forceCode: _forceCode,
+    ...legacyDocument
+  } = document;
   assert.deepEqual(parsePublicProfileData(userId, {
     ...legacyDocument,
     militaryUnit: militaryUnitName,
-  }), profile);
-  assert.equal(parsePublicProfileData(userId, { ...document, lastName: 'Yılmaz' }), null);
+  }), { ...profile, lastName: null });
+  assert.equal(parsePublicProfileData(userId, { ...document, lastName: 'A' }), null);
   assert.equal(parsePublicProfileData(userId, { ...document, birthYear: 2000 }), null);
   assert.equal(parsePublicProfileData(userId, { ...document, phoneNumber: '+905000000000' }), null);
 });
@@ -166,4 +187,63 @@ test('empty-state copy reflects the selected segment', () => {
   assert.equal(getDiscoveryEmptyStateCopy('all'), 'Henüz senin devre grubunda başka kimse yok.');
   assert.equal(getDiscoveryEmptyStateCopy('residence'), 'Henüz senin şehrinden bir devre bulunamadı.');
   assert.equal(getDiscoveryEmptyStateCopy('departure'), 'Henüz seninle aynı yerden yola çıkacak bir devre yok.');
+});
+
+test('display name includes a normalized surname and safely supports legacy profiles', () => {
+  assert.equal(getPublicProfileDisplayName(createProfile({ firstName: '  Onurcan ', lastName: ' Özovalı  ' })), 'Onurcan Özovalı');
+  assert.equal(getPublicProfileDisplayName(createProfile({ firstName: 'Onurcan', lastName: null })), 'Onurcan');
+  assert.equal(matchesDiscoveryNameSearch(createProfile({ firstName: 'Onurcan', lastName: 'Özovalı' }), 'özovalı'), true);
+});
+
+test('discovery pagination uses a bounded first page and the prior cursor for page two', () => {
+  assert.deepEqual(createDiscoveryPageRequest(), { cursor: null, limit: DISCOVERY_PAGE_SIZE });
+  assert.deepEqual(createDiscoveryPageRequest('profile-040'), {
+    cursor: 'profile-040',
+    limit: DISCOVERY_PAGE_SIZE,
+  });
+  assert.equal(DISCOVERY_PAGE_SIZE, 40);
+});
+
+test('discovery pagination appends unique profiles without changing earlier page order', () => {
+  const firstPage = [
+    createProfile({ userId: 'profile-001' }),
+    createProfile({ userId: 'profile-002' }),
+  ];
+  const pages = appendUniqueDiscoveryPage([firstPage], [
+    createProfile({ userId: 'profile-002' }),
+    createProfile({ userId: 'profile-003' }),
+  ]);
+  assert.deepEqual(pages.flatMap((page) => page.map(({ userId }) => userId)), [
+    'profile-001', 'profile-002', 'profile-003',
+  ]);
+  assert.equal(pages[0], firstPage);
+});
+
+test('discovery pagination end and concurrency guards stop redundant requests', () => {
+  assert.equal(hasMoreDiscoveryPages(DISCOVERY_PAGE_SIZE), true);
+  assert.equal(hasMoreDiscoveryPages(DISCOVERY_PAGE_SIZE - 1), false);
+  assert.equal(canLoadNextDiscoveryPage({ hasMore: false, isLoading: false }), false);
+  assert.equal(canLoadNextDiscoveryPage({ hasMore: true, isLoading: true }), false);
+  assert.equal(canLoadNextDiscoveryPage({ hasMore: true, isLoading: false }), true);
+});
+
+test('only effective Firestore query changes reset discovery pagination', () => {
+  const key = getDiscoveryQueryKey(reference);
+  assert.equal(shouldResetDiscoveryPagination(key, getDiscoveryQueryKey(reference)), false);
+  assert.equal(shouldResetDiscoveryPagination(
+    key,
+    getDiscoveryQueryKey({ ...reference, militaryPeriodMonth: 3 }),
+  ), true);
+  // Residence/departure segments are not part of DiscoveryQuery and therefore keep this key/cursor.
+});
+
+test('blocked profiles remain excluded from every loaded discovery page', () => {
+  const profiles = [
+    createProfile({ userId: 'visible' }),
+    createProfile({ userId: 'blocked' }),
+  ];
+  assert.deepEqual(
+    excludeBlockedDiscoveryProfiles(profiles, new Set(['blocked'])).map(({ userId }) => userId),
+    ['visible'],
+  );
 });

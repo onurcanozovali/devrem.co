@@ -14,11 +14,10 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
-import { PREPARATION_CATEGORIES } from '../preparationCategories';
 import { validatePreparationTitle } from '../services/preparationDomain';
-import type { PreparationCategoryId, PreparationItem, PreparationItemInput } from '../types/preparation';
+import type { PreparationItem, PreparationItemInput } from '../types/preparation';
 
-export type PreparationFormMode = 'create' | 'edit' | 'category';
+export type PreparationFormMode = 'create' | 'edit';
 
 interface PreparationItemFormModalProps {
   visible: boolean;
@@ -35,21 +34,20 @@ export function PreparationItemFormModal({
   onClose,
   onSubmit,
 }: PreparationItemFormModalProps) {
-  const { colors, radii, spacing } = useTheme();
+  const { colors, spacing } = useTheme();
   const titleInputRef = useRef<TextInput>(null);
   const [title, setTitle] = useState(item?.title ?? '');
-  const [category, setCategory] = useState<PreparationCategoryId>(item?.category ?? 'official');
   const [titleError, setTitleError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!visible || mode === 'category') return undefined;
+    if (!visible) return undefined;
     const timer = setTimeout(() => titleInputRef.current?.focus(), 350);
     return () => clearTimeout(timer);
   }, [mode, visible]);
 
-  const heading = mode === 'create' ? 'Görev ekle' : mode === 'category' ? 'Kategori değiştir' : 'Görevi düzenle';
+  const heading = mode === 'create' ? 'Görev ekle' : 'Görevi düzenle';
   const submitLabel = mode === 'create' ? 'Görevi ekle' : 'Değişiklikleri kaydet';
 
   const submit = async () => {
@@ -60,7 +58,9 @@ export function PreparationItemFormModal({
 
     setSaving(true);
     try {
-      await onSubmit({ title, category });
+      // Custom tasks use a stable internal category; the UI groups every custom item
+      // under “Benim Eklediklerim” independently of the default category taxonomy.
+      await onSubmit({ title, category: item?.category ?? 'personal' });
       onClose();
     } catch (error: unknown) {
       setSubmitError(error instanceof Error ? error.message : 'Görev kaydedilemedi. Lütfen tekrar dene.');
@@ -105,53 +105,6 @@ export function PreparationItemFormModal({
               onSubmitEditing={() => void submit()}
               editable={!saving}
             />
-
-            <View style={{ gap: spacing.sm }}>
-              <AppText weight="600">Kategori</AppText>
-              <View
-                accessibilityRole="radiogroup"
-                style={{ backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, overflow: 'hidden' }}
-              >
-                {PREPARATION_CATEGORIES.map((option, index) => {
-                  const selected = category === option.id;
-                  return (
-                    <Pressable
-                      key={option.id}
-                      accessibilityRole="radio"
-                      accessibilityState={{ checked: selected, disabled: saving }}
-                      disabled={saving}
-                      onPress={() => setCategory(option.id)}
-                      style={({ pressed }) => ({
-                        alignItems: 'center',
-                        backgroundColor: selected ? colors.primarySubtle : pressed ? colors.surfaceSecondary : colors.inputBackground,
-                        borderTopColor: colors.divider,
-                        borderTopWidth: index === 0 ? 0 : 1,
-                        flexDirection: 'row',
-                        gap: spacing.md,
-                        minHeight: 52,
-                        paddingHorizontal: spacing.md,
-                      })}
-                    >
-                      <View style={{
-                        alignItems: 'center',
-                        borderColor: selected ? colors.primary : colors.border,
-                        borderRadius: 10,
-                        borderWidth: 2,
-                        height: 20,
-                        justifyContent: 'center',
-                        width: 20,
-                      }}>
-                        {selected ? <View style={{ backgroundColor: colors.primary, borderRadius: 5, height: 10, width: 10 }} /> : null}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <AppText weight={selected ? '700' : '500'}>{option.label}</AppText>
-                        <AppText color="muted" variant="caption">{option.shortDescription}</AppText>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
 
             {submitError ? (
               <AppText color="danger" accessibilityLiveRegion="polite">{submitError}</AppText>
