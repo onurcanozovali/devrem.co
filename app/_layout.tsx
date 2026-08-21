@@ -1,37 +1,48 @@
-import { Stack } from 'expo-router';
+import { Stack as NativeStack } from 'expo-router';
+import { Stack as JavaScriptStack } from 'expo-router/js-stack';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AppErrorBoundary } from '@/components/common/AppErrorBoundary';
 import { EmptyState } from '@/components/common/EmptyState';
-import { LoadingState } from '@/components/common/LoadingState';
 import { ScreenContainer } from '@/components/common/ScreenContainer';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { useCurrentDevreGroup } from '@/features/groups/useCurrentDevreGroup';
+import { getAppConfig } from '@/config/env';
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import { PreparationProvider } from '@/features/preparation/PreparationProvider';
 import { NotificationProvider } from '@/features/notifications/NotificationProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
-SplashScreen.setOptions({ duration: 350, fade: true });
+SplashScreen.setOptions({ duration: 0, fade: false });
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function RootNavigator() {
-  const { colors } = useTheme();
-  const { status, initializationError } = useAuth();
+  const { status, initializationError, legalStatus, legalError, refreshLegalAcceptance } = useAuth();
   const { status: profileStatus, error: profileError, refreshProfile } = useProfile();
+  const useJavaScriptStack = Platform.OS === 'android';
+  const Stack = useJavaScriptStack ? JavaScriptStack : NativeStack;
+  const enforceLegalGate = getAppConfig().environment === 'production';
+  const hasCurrentLegalAcceptance = legalStatus === 'current';
+  const isProfileDecisionPending = status === 'authenticated'
+    && (profileStatus === 'idle' || profileStatus === 'loading');
+  const isLegalDecisionPending = status === 'authenticated'
+    && enforceLegalGate
+    && (legalStatus === 'idle' || legalStatus === 'loading');
+  const isBootDecisionPending = status === 'initializing'
+    || isProfileDecisionPending
+    || isLegalDecisionPending;
 
-  if (status === 'initializing') {
-    return (
-      <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}>
-        <LoadingState label="Oturumunuz hazırlanıyor…" />
-      </ScreenContainer>
-    );
-  }
+  useEffect(() => {
+    if (!isBootDecisionPending) void SplashScreen.hideAsync().catch(() => undefined);
+  }, [isBootDecisionPending]);
+
+  if (isBootDecisionPending) return null;
 
   if (initializationError) {
     return (
@@ -41,10 +52,10 @@ function RootNavigator() {
     );
   }
 
-  if (status === 'authenticated' && (profileStatus === 'idle' || profileStatus === 'loading')) {
+  if (status === 'authenticated' && enforceLegalGate && legalStatus === 'error') {
     return (
       <ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}>
-        <LoadingState label="Profiliniz hazırlanıyor…" />
+        <EmptyState title="Yasal tercihler yüklenemedi" description={legalError ?? 'Lütfen tekrar deneyin.'} actionLabel="Tekrar dene" onAction={() => void refreshLegalAcceptance()} />
       </ScreenContainer>
     );
   }
@@ -65,25 +76,30 @@ function RootNavigator() {
   return (
     <NotificationProvider>
       <Stack
+        detachInactiveScreens={useJavaScriptStack ? false : undefined}
         screenOptions={{
-          contentStyle: { backgroundColor: colors.background },
           headerShown: false,
         }}
       >
         <Stack.Screen name="index" />
         <Stack.Screen name="share-confirmation" />
+        <Stack.Screen name="legal" />
         <Stack.Protected guard={status === 'unauthenticated'}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
-        <Stack.Protected guard={status === 'authenticated' && (profileStatus === 'missing' || profileStatus === 'incomplete')}>
+        <Stack.Protected guard={status === 'authenticated' && (profileStatus === 'missing' || profileStatus === 'incomplete') && (!enforceLegalGate || hasCurrentLegalAcceptance)}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
-        <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete'}>
+        <Stack.Protected guard={status === 'authenticated' && enforceLegalGate && legalStatus === 'required'}>
+          <Stack.Screen name="legal-update" />
+        </Stack.Protected>
+        <Stack.Protected guard={status === 'authenticated' && profileStatus === 'complete' && (!enforceLegalGate || hasCurrentLegalAcceptance)}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="devre/[userId]" />
           <Stack.Screen name="group-chat/[groupId]" />
           <Stack.Screen name="group-info/[groupId]" />
           <Stack.Screen name="group-media/[groupId]" />
+          <Stack.Screen name="direct-chat/[conversationId]" />
           <Stack.Screen name="notifications" />
         </Stack.Protected>
       </Stack>
@@ -96,17 +112,11 @@ function ThemedStatusBar() {
   return <StatusBar animated style={resolvedScheme === 'dark' ? 'light' : 'dark'} />;
 }
 
-function DevreGroupWarmup() {
-  useCurrentDevreGroup();
-  return null;
-}
-
 const DataProviders = memo(function DataProviders() {
   return (
     <AppErrorBoundary>
       <AuthProvider>
         <ProfileProvider>
-          <DevreGroupWarmup />
           <PreparationProvider>
             <RootNavigator />
           </PreparationProvider>

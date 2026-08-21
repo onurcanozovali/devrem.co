@@ -21,6 +21,8 @@ export function Avatar({
 }: AvatarProps) {
   const { colors } = useTheme();
   const [failedImageURL, setFailedImageURL] = useState<string | null>(null);
+  const hasImage = Boolean(imageURL && imageURL !== failedImageURL);
+  const cornerRadius = Math.min(12, Math.round(size * 0.18));
 
   return (
     <View
@@ -31,19 +33,20 @@ export function Avatar({
         alignItems: 'center',
         backgroundColor: colors.primarySubtle,
         borderColor: colors.border,
-        borderRadius: size / 2,
-        borderWidth: 1,
+        borderRadius: cornerRadius,
+        borderWidth: hasImage ? 0 : 1,
         height: size,
         justifyContent: 'center',
         overflow: 'hidden',
         width: size,
       }}
     >
-      {imageURL && imageURL !== failedImageURL ? (
+      {hasImage ? (
         <Image
           onError={() => setFailedImageURL(imageURL)}
-          source={{ uri: imageURL }}
-          style={{ height: size, width: size }}
+          resizeMode="cover"
+          source={{ uri: imageURL as string }}
+          style={{ borderRadius: cornerRadius, height: size, width: size }}
         />
       ) : (
         <AppText

@@ -34,6 +34,15 @@ interface ThemeModeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 const ThemeModeContext = createContext<ThemeModeContextValue | null>(null);
 
+const darkThemeValue: ThemeContextValue = {
+  colorScheme: 'dark',
+  colors: darkColors,
+  radii,
+  resolvedScheme: 'dark',
+  spacing,
+  typography,
+};
+
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>(initialMode);
@@ -65,6 +74,10 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
     </ThemeModeContext.Provider>
   );
+}
+
+export function DarkThemeScope({ children }: PropsWithChildren) {
+  return <ThemeContext.Provider value={darkThemeValue}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {
