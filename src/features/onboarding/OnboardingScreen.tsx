@@ -10,6 +10,7 @@ import { DatePickerField } from '@/components/ui/DatePickerField';
 import { SelectField } from '@/components/ui/SelectField';
 import { TextField } from '@/components/ui/TextField';
 import type { ProvinceCode } from '@/data/turkeyProvinces';
+import { getMilitaryUnitById, getMilitaryUnitsByCity } from '@/features/militaryUnits/catalog';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import {
   createMilitaryMonthOptions,
@@ -71,6 +72,8 @@ export function OnboardingScreen() {
   const [militaryYear, setMilitaryYear] = useState<number | null>(null);
   const [militaryMonth, setMilitaryMonth] = useState<number | null>(null);
   const [knowsMilitaryUnit, setKnowsMilitaryUnit] = useState(false);
+  const [usesUnresolvedMilitaryUnit, setUsesUnresolvedMilitaryUnit] = useState(false);
+  const [militaryUnitId, setMilitaryUnitId] = useState<string | null>(null);
   const [militaryUnit, setMilitaryUnit] = useState('');
   const [reportingDate, setReportingDate] = useState<Date | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -82,6 +85,11 @@ export function OnboardingScreen() {
     () => createMilitaryMonthOptions(militaryYear, referenceDate),
     [militaryYear, referenceDate],
   );
+  const militaryUnitOptions = useMemo(() => getMilitaryUnitsByCity(militaryCity).map((unit) => ({
+    value: unit.id,
+    label: unit.name,
+    searchText: [unit.shortName ?? '', ...unit.aliases].join(' '),
+  })), [militaryCity]);
   const minimumReportingDate = useMemo(
     () => militaryYear !== null && militaryMonth !== null
       ? getMinimumReportingDate(militaryYear, militaryMonth, referenceDate)
@@ -153,7 +161,9 @@ export function OnboardingScreen() {
     }
 
     if (step === 3) {
-      if (knowsMilitaryUnit && !isValidMilitaryUnit(militaryUnit)) {
+      if (knowsMilitaryUnit && !usesUnresolvedMilitaryUnit && !getMilitaryUnitById(militaryUnitId)) {
+        nextErrors.militaryUnit = 'Birliğini listeden seç.';
+      } else if (knowsMilitaryUnit && usesUnresolvedMilitaryUnit && !isValidMilitaryUnit(militaryUnit)) {
         nextErrors.militaryUnit = `Birlik adı ${profileFieldLimits.militaryUnitMin}-${profileFieldLimits.militaryUnitMax} karakter olmalı.`;
       }
       const storedReportingDate = reportingDate ? localDateToStoredDate(reportingDate) : null;
@@ -176,7 +186,8 @@ export function OnboardingScreen() {
 
   const buildProfileInput = (): CompleteUserProfileInput | null => {
     const storedReportingDate = reportingDate ? localDateToStoredDate(reportingDate) : null;
-    const normalizedUnit = knowsMilitaryUnit ? normalizeWhitespace(militaryUnit) : null;
+    const selectedUnit = !usesUnresolvedMilitaryUnit ? getMilitaryUnitById(militaryUnitId) : null;
+    const normalizedUnit = knowsMilitaryUnit ? selectedUnit?.name ?? normalizeWhitespace(militaryUnit) : null;
     if (
       !isValidName(firstName)
       || !isValidName(lastName)
@@ -188,7 +199,8 @@ export function OnboardingScreen() {
       || militaryYear === null
       || militaryMonth === null
       || !isMilitaryPeriodCurrentOrFuture(militaryYear, militaryMonth, referenceDate)
-      || (knowsMilitaryUnit && !isValidMilitaryUnit(normalizedUnit))
+      || (knowsMilitaryUnit && !selectedUnit && !isValidMilitaryUnit(normalizedUnit))
+      || (selectedUnit && selectedUnit.cityCode !== militaryCity)
       || storedReportingDate === null
       || !isReportingDateConsistent(
         storedReportingDate,
@@ -209,6 +221,9 @@ export function OnboardingScreen() {
       militaryPeriodYear: militaryYear,
       militaryPeriodMonth: militaryMonth,
       militaryUnit: normalizedUnit,
+      militaryUnitId: selectedUnit?.id ?? null,
+      militaryUnitNameSnapshot: normalizedUnit,
+      forceCode: selectedUnit?.forceCode ?? null,
       reportingDate: storedReportingDate,
     };
   };
@@ -247,6 +262,11 @@ export function OnboardingScreen() {
         accessibilityState={{ selected }}
         onPress={() => {
           setKnowsMilitaryUnit(known);
+          if (!known) {
+            setUsesUnresolvedMilitaryUnit(false);
+            setMilitaryUnitId(null);
+            setMilitaryUnit('');
+          }
           clearError('militaryUnit');
         }}
         style={({ pressed }) => ({
@@ -368,7 +388,13 @@ export function OnboardingScreen() {
               placeholder="Şehir seç"
               value={militaryCity}
               options={provinceOptions}
-              onValueChange={(value) => { setMilitaryCity(value); clearError('militaryCity'); }}
+              onValueChange={(value) => {
+                setMilitaryCity(value);
+                setMilitaryUnitId(null);
+                setMilitaryUnit('');
+                clearError('militaryCity');
+                clearError('militaryUnit');
+              }}
               error={errors.militaryCity}
               searchPlaceholder="İl ara"
             />
@@ -425,15 +451,40 @@ export function OnboardingScreen() {
             </View>
 
             {knowsMilitaryUnit ? (
-              <TextField
-                label="Birlik adı"
-                value={militaryUnit}
-                onChangeText={(value) => { setMilitaryUnit(value); clearError('militaryUnit'); }}
-                error={errors.militaryUnit}
-                placeholder="Örn. 5. Piyade Eğitim Tugayı"
-                autoCapitalize="sentences"
-                maxLength={profileFieldLimits.militaryUnitMax}
-              />
+              <View style={{ gap: spacing.md }}>
+                {!usesUnresolvedMilitaryUnit ? <SelectField
+                  label="Askerî birlik"
+                  value={militaryUnitId}
+                  options={militaryUnitOptions}
+                  onValueChange={(value) => {
+                    const unit = getMilitaryUnitById(value);
+                    setMilitaryUnitId(value);
+                    setMilitaryUnit(unit?.name ?? '');
+                    clearError('militaryUnit');
+                  }}
+                  error={errors.militaryUnit}
+                  placeholder={militaryCity ? 'Birlik seç' : 'Önce görev şehrini seç'}
+                  searchPlaceholder="Birlik veya bilinen adını ara"
+                  disabled={!militaryCity}
+                /> : <TextField
+                  label="Birlik adı"
+                  value={militaryUnit}
+                  onChangeText={(value) => { setMilitaryUnit(value); clearError('militaryUnit'); }}
+                  error={errors.militaryUnit}
+                  placeholder="Birlik adını yaz"
+                  autoCapitalize="sentences"
+                  maxLength={profileFieldLimits.militaryUnitMax}
+                />}
+                <Pressable accessibilityRole="button" onPress={() => {
+                  setUsesUnresolvedMilitaryUnit((current) => !current);
+                  setMilitaryUnitId(null);
+                  setMilitaryUnit('');
+                  clearError('militaryUnit');
+                }} style={{ minHeight: 44, justifyContent: 'center' }}>
+                  <AppText style={{ color: colors.primary }} weight="700">{usesUnresolvedMilitaryUnit ? 'Listeden birlik seç' : 'Birliğimi bulamıyorum'}</AppText>
+                </Pressable>
+                {militaryCity && militaryUnitOptions.length === 0 && !usesUnresolvedMilitaryUnit ? <AppText color="muted" variant="caption">Bu şehir için doğrulanmış katalog kaydı bulunamadı. “Birliğimi bulamıyorum” seçeneğini kullanabilirsin.</AppText> : null}
+              </View>
             ) : (
               <AppText color="muted" variant="caption">
                 Sorun değil; birlik bilgini daha sonra ekleyebilirsin.

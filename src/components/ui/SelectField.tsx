@@ -10,6 +10,7 @@ type SelectValue = string | number;
 export interface SelectOption<T extends SelectValue> {
   value: T;
   label: string;
+  searchText?: string;
 }
 
 interface SelectFieldProps<T extends SelectValue> {
@@ -42,7 +43,7 @@ export function SelectField<T extends SelectValue>({
   const filteredOptions = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('tr-TR');
     if (!normalizedSearch) return options;
-    return options.filter((option) => option.label.toLocaleLowerCase('tr-TR').includes(normalizedSearch));
+    return options.filter((option) => `${option.label} ${option.searchText ?? ''}`.toLocaleLowerCase('tr-TR').includes(normalizedSearch));
   }, [options, search]);
 
   const close = () => {

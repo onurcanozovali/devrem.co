@@ -1,4 +1,5 @@
 import type { ProvinceCode } from '@/data/turkeyProvinces';
+import type { ForceCode } from '@/features/militaryUnits/types';
 
 export const militaryTypes = ['standard', 'paid', 'reserveOfficer', 'reserveNco'] as const;
 
@@ -15,11 +16,21 @@ export interface CompleteUserProfileInput {
   militaryPeriodYear: number;
   militaryPeriodMonth: number;
   militaryUnit: string | null;
+  militaryUnitId?: string | null;
+  militaryUnitNameSnapshot?: string | null;
+  forceCode?: ForceCode | null;
   reportingDate: string;
 }
 
-export interface UserProfile extends CompleteUserProfileInput {
+export interface UserProfile
+  extends Omit<
+    CompleteUserProfileInput,
+    'militaryUnitId' | 'militaryUnitNameSnapshot' | 'forceCode'
+  > {
   uid: string;
+  militaryUnitId: string | null;
+  militaryUnitNameSnapshot: string | null;
+  forceCode: ForceCode | null;
   photoPath: string | null;
   onboardingCompleted: true;
   createdAt: Date | null;

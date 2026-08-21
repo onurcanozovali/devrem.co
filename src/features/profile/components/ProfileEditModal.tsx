@@ -1,13 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, View } from 'react-native';
+import { Modal, Pressable, View } from 'react-native';
 
 import { ScreenContainer } from '@/components/common/ScreenContainer';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { DatePickerField } from '@/components/ui/DatePickerField';
+import { DevremConfirmModal } from '@/components/ui/DevremConfirmModal';
 import { SelectField } from '@/components/ui/SelectField';
 import { TextField } from '@/components/ui/TextField';
+import { getMilitaryUnitById, getMilitaryUnitsByCity } from '@/features/militaryUnits/catalog';
 import {
   createMilitaryMonthOptions,
   createMilitaryYearOptions,
@@ -44,9 +46,11 @@ export function ProfileEditModal({ profile, visible, onClose, onSave }: ProfileE
   const { colors, radii, spacing } = useTheme();
   const [referenceDate] = useState(() => new Date());
   const [values, setValues] = useState<ProfileFormValues>(() => createProfileFormValues(profile));
+  const [usesUnresolvedMilitaryUnit, setUsesUnresolvedMilitaryUnit] = useState(() => Boolean(profile.militaryUnit && !profile.militaryUnitId));
   const [errors, setErrors] = useState<ProfileFormErrors>({});
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const storedPeriod = useMemo(() => ({
     year: profile.militaryPeriodYear,
     month: profile.militaryPeriodMonth,
@@ -59,6 +63,11 @@ export function ProfileEditModal({ profile, visible, onClose, onSave }: ProfileE
     () => createMilitaryMonthOptions(values.militaryYear, referenceDate, storedPeriod),
     [referenceDate, storedPeriod, values.militaryYear],
   );
+  const militaryUnitOptions = useMemo(() => getMilitaryUnitsByCity(values.militaryCity).map((unit) => ({
+    value: unit.id,
+    label: unit.name,
+    searchText: [unit.shortName ?? '', ...unit.aliases].join(' '),
+  })), [values.militaryCity]);
   const periodChanged = values.militaryYear !== profile.militaryPeriodYear
     || values.militaryMonth !== profile.militaryPeriodMonth;
   const existingPeriodIsCurrentOrFuture = isMilitaryPeriodCurrentOrFuture(
@@ -91,14 +100,7 @@ export function ProfileEditModal({ profile, visible, onClose, onSave }: ProfileE
       onClose();
       return;
     }
-    Alert.alert(
-      'Değişiklikler kaydedilmedi',
-      'Profilden çıkarsan yaptığın değişiklikler kaybolacak.',
-      [
-        { text: 'Düzenlemeye devam et', style: 'cancel' },
-        { text: 'Değişiklikleri sil', style: 'destructive', onPress: onClose },
-      ],
-    );
+    setDiscardConfirmOpen(true);
   };
 
   const handleSave = async () => {
@@ -135,6 +137,10 @@ export function ProfileEditModal({ profile, visible, onClose, onSave }: ProfileE
         accessibilityState={{ selected }}
         onPress={() => {
           setField('knowsMilitaryUnit', known);
+          if (!known) {
+            setUsesUnresolvedMilitaryUnit(false);
+            setValues((current) => ({ ...current, forceCode: null, militaryUnit: '', militaryUnitId: null }));
+          }
           clearError('militaryUnit');
         }}
         style={({ pressed }) => ({
@@ -160,6 +166,7 @@ export function ProfileEditModal({ profile, visible, onClose, onSave }: ProfileE
   };
 
   return (
+    <>
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={requestClose}>
       <ScreenContainer contentContainerStyle={{ gap: spacing.xl, paddingBottom: spacing.xl }}>
         <View style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.md, paddingTop: spacing.sm }}>
@@ -294,7 +301,12 @@ export function ProfileEditModal({ profile, visible, onClose, onSave }: ProfileE
             placeholder="Şehir seç"
             value={values.militaryCity}
             options={provinceOptions}
-            onValueChange={(value) => setField('militaryCity', value)}
+            onValueChange={(value) => {
+              setValues((current) => ({ ...current, forceCode: null, militaryCity: value, militaryUnit: '', militaryUnitId: null }));
+              setUsesUnresolvedMilitaryUnit(false);
+              clearError('militaryCity');
+              clearError('militaryUnit');
+            }}
             error={errors.militaryCity}
             searchPlaceholder="İl ara"
           />
@@ -304,14 +316,36 @@ export function ProfileEditModal({ profile, visible, onClose, onSave }: ProfileE
             {renderUnitChoice(true, 'Birliğimi biliyorum')}
           </View>
           {values.knowsMilitaryUnit ? (
-            <TextField
-              label="Birlik adı"
-              value={values.militaryUnit}
-              onChangeText={(value) => setField('militaryUnit', value)}
-              error={errors.militaryUnit}
-              autoCapitalize="sentences"
-              maxLength={profileFieldLimits.militaryUnitMax}
-            />
+            <View style={{ gap: spacing.md }}>
+              {!usesUnresolvedMilitaryUnit ? <SelectField
+                label="Askerî birlik"
+                value={values.militaryUnitId}
+                options={militaryUnitOptions}
+                onValueChange={(value) => {
+                  const unit = getMilitaryUnitById(value);
+                  setValues((current) => ({ ...current, forceCode: unit?.forceCode ?? null, militaryUnit: unit?.name ?? '', militaryUnitId: value }));
+                  clearError('militaryUnit');
+                }}
+                error={errors.militaryUnit}
+                placeholder={values.militaryCity ? 'Birlik seç' : 'Önce görev şehrini seç'}
+                searchPlaceholder="Birlik veya bilinen adını ara"
+                disabled={!values.militaryCity}
+              /> : <TextField
+                label="Birlik adı"
+                value={values.militaryUnit}
+                onChangeText={(value) => setField('militaryUnit', value)}
+                error={errors.militaryUnit}
+                autoCapitalize="sentences"
+                maxLength={profileFieldLimits.militaryUnitMax}
+              />}
+              <Pressable accessibilityRole="button" onPress={() => {
+                setUsesUnresolvedMilitaryUnit((current) => !current);
+                setValues((current) => ({ ...current, forceCode: null, militaryUnit: '', militaryUnitId: null }));
+                clearError('militaryUnit');
+              }} style={{ minHeight: 44, justifyContent: 'center' }}>
+                <AppText style={{ color: colors.primary }} weight="700">{usesUnresolvedMilitaryUnit ? 'Listeden birlik seç' : 'Birliğimi bulamıyorum'}</AppText>
+              </Pressable>
+            </View>
           ) : null}
           <DatePickerField
             label="Teslim tarihi"
@@ -340,5 +374,15 @@ export function ProfileEditModal({ profile, visible, onClose, onSave }: ProfileE
         />
       </ScreenContainer>
     </Modal>
+    <DevremConfirmModal
+      confirmLabel="Değişiklikleri sil"
+      description="Profilden çıkarsan yaptığın değişiklikler kaybolacak."
+      destructive
+      onClose={() => setDiscardConfirmOpen(false)}
+      onConfirm={() => { setDiscardConfirmOpen(false); onClose(); }}
+      title="Değişiklikler kaydedilmedi"
+      visible={discardConfirmOpen}
+    />
+    </>
   );
 }
