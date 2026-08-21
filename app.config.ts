@@ -1,6 +1,9 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+import { readFileSync } from 'node:fs';
 import legalEntity from './src/features/legal/legalEntity.json';
 
+const productionFirebaseProjectId = 'devrem-d985b';
+const productionApplicationId = 'com.devrem.app';
 const easBuildProfile = process.env.EAS_BUILD_PROFILE?.trim();
 const appEnvironment = process.env.EXPO_PUBLIC_APP_ENV?.trim();
 const isReleaseBuild = easBuildProfile === 'production'
@@ -16,6 +19,31 @@ function requireReleaseValue(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`Release configuration is incomplete: ${name} is required.`);
   return value;
+}
+
+function requirePlistValue(contents: string, key: string): string {
+  const match = contents.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`));
+  if (!match?.[1]) throw new Error(`Release iOS Firebase configuration is missing ${key}.`);
+  return match[1].trim();
+}
+
+function validateReleaseNativeFirebase(androidPath: string, iosPath: string): void {
+  let androidConfig: { client?: { client_info?: { android_client_info?: { package_name?: string } } }[]; project_info?: { project_id?: string } };
+  let iosConfig: string;
+  try {
+    androidConfig = JSON.parse(readFileSync(androidPath, 'utf8')) as typeof androidConfig;
+    iosConfig = readFileSync(iosPath, 'utf8');
+  } catch {
+    throw new Error('Release native Firebase configuration files are missing or unreadable.');
+  }
+  if (androidConfig.project_info?.project_id !== productionFirebaseProjectId
+    || androidConfig.client?.[0]?.client_info?.android_client_info?.package_name !== productionApplicationId) {
+    throw new Error('Release Android Firebase configuration does not match devrem-d985b / com.devrem.app.');
+  }
+  if (requirePlistValue(iosConfig, 'PROJECT_ID') !== productionFirebaseProjectId
+    || requirePlistValue(iosConfig, 'BUNDLE_ID') !== productionApplicationId) {
+    throw new Error('Release iOS Firebase configuration does not match devrem-d985b / com.devrem.app.');
+  }
 }
 
 if (isReleaseBuild && Object.values(legalEntity).some(isPlaceholder)) {
@@ -35,6 +63,10 @@ if (isReleaseBuild) {
     'EXPO_PUBLIC_FIREBASE_PROJECT_ID', 'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET',
     'EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID', 'EXPO_PUBLIC_FIREBASE_APP_ID',
   ]) requireReleaseValue(name);
+  if (requireReleaseValue('EXPO_PUBLIC_FIREBASE_PROJECT_ID') !== productionFirebaseProjectId) {
+    throw new Error(`Release Firebase project must be ${productionFirebaseProjectId}.`);
+  }
+  validateReleaseNativeFirebase(androidFirebaseConfig, iosFirebaseConfig);
 }
 
 function includeString(values: string[] | undefined, value: string): string[] {
