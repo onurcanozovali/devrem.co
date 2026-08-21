@@ -1,22 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useEffect, useMemo } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { EmptyState } from '@/components/common/EmptyState';
-import { LoadingState } from '@/components/common/LoadingState';
+import { MainTabHeader } from '@/components/common/MainTabHeader';
 import { ScreenContainer } from '@/components/common/ScreenContainer';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { getProvinceName } from '@/data/turkeyProvinces';
+import { CampaignPlacement } from '@/features/campaigns/CampaignPlacement';
+import { createCampaignContext } from '@/features/campaigns/campaignDomain';
+import { ForceAvatar } from '@/features/militaryUnits/ForceAvatar';
+import { getForceDisplayName } from '@/features/militaryUnits/forceBranding';
 import { usePreparation } from '@/features/preparation/hooks/usePreparation';
 import { usePreparationSummary } from '@/features/preparation/hooks/usePreparationSummary';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import { getMilitaryPeriodLabel, militaryTypeLabels } from '@/features/profile/profileOptions';
 import { formatStoredDate } from '@/features/profile/services/profileValidation';
 import { useTheme } from '@/theme/ThemeProvider';
-import { getImportantPreparationState, getReportingCountdown } from './services/homeDomain';
+import { getImportantPreparationState, getReportingCountdown, getTimeBasedGreeting } from './services/homeDomain';
 
 export function HomeScreen() {
 	const { colors, radii, spacing } = useTheme();
@@ -25,16 +29,14 @@ export function HomeScreen() {
 		status: preparationStatus,
 		items,
 		error: preparationError,
-		startPreparation,
+		activatePreparation,
 		retryPreparation,
 	} = usePreparation();
 	const preparationSummary = usePreparationSummary(items);
 	const importantPreparation = useMemo(() => getImportantPreparationState(items), [items]);
 	const countdown = getReportingCountdown(profile?.reportingDate);
 
-	useEffect(() => {
-		void startPreparation();
-	}, [startPreparation]);
+	useFocusEffect(useCallback(() => activatePreparation(), [activatePreparation]));
 
 	const openPreparation = () => router.push('/preparation');
 
@@ -51,14 +53,6 @@ export function HomeScreen() {
 		);
 	}
 
-	if (preparationStatus === 'idle' || preparationStatus === 'loading') {
-		return (
-			<ScreenContainer scrollable={false} contentContainerStyle={{ justifyContent: 'center' }}>
-				<LoadingState label="Ana sayfan hazırlanıyor…" />
-			</ScreenContainer>
-		);
-	}
-
 	const militaryCity = getProvinceName(profile.militaryCity);
 	const reportingDateLabel = countdown.state === 'unavailable'
 		? 'Teslim tarihi doğrulanamadı'
@@ -66,14 +60,11 @@ export function HomeScreen() {
 
 	return (
 		<ScreenContainer contentContainerStyle={{ gap: spacing.xl, paddingBottom: spacing.xxl }}>
-			<View style={{ gap: spacing.xs, paddingTop: spacing.sm }}>
-				<AppText color="muted">Merhaba, {profile.firstName}</AppText>
-				<AppText variant="title" weight="800">Ana Sayfa</AppText>
-			</View>
+			<MainTabHeader title={getTimeBasedGreeting(profile.firstName)} />
 
 			<View
 				accessibilityRole="summary"
-				accessibilityLabel={getCountdownAccessibilityLabel(countdown.state, countdown.daysRemaining, reportingDateLabel, militaryCity)}
+				accessibilityLabel={getCountdownAccessibilityLabel(countdown.state, countdown.daysRemaining, reportingDateLabel)}
 				style={{
 					backgroundColor: colors.primary,
 					borderRadius: radii.lg,
@@ -84,17 +75,45 @@ export function HomeScreen() {
 				<CountdownHeadline state={countdown.state} daysRemaining={countdown.daysRemaining} />
 				<View style={{ gap: spacing.sm }}>
 					<HeroDetail icon="calendar-outline" label={reportingDateLabel} />
-					<HeroDetail icon="location-outline" label={militaryCity} />
 				</View>
 			</View>
 
-			<View style={{ gap: spacing.md }}>
-				<View style={{ gap: spacing.xs }}>
+			<CampaignPlacement
+				placement="home_transport_offer"
+				context={createCampaignContext('home_transport_offer', {
+					departureCityId: profile.departureCity,
+					militaryCityId: profile.militaryCity,
+					militaryUnitId: profile.militaryUnitId,
+					forceCode: profile.forceCode,
+					militaryType: profile.militaryType,
+					conscriptionPeriodYear: profile.militaryPeriodYear,
+					conscriptionPeriodMonth: profile.militaryPeriodMonth,
+					daysUntilService: countdown.state === 'future' || countdown.state === 'today' ? countdown.daysRemaining : undefined,
+					serviceDate: profile.reportingDate,
+				})}
+			/>
+
+			<Pressable
+				accessibilityRole={profile.militaryUnitId ? 'button' : undefined}
+				accessibilityLabel={profile.militaryUnitId ? 'Birlik bilgilerini aç' : undefined}
+				disabled={!profile.militaryUnitId}
+				onPress={() => profile.militaryUnitId && router.push({
+					pathname: '/military-unit/[unitId]',
+					params: { unitId: profile.militaryUnitId },
+				})}
+				style={({ pressed }) => ({ gap: spacing.md, opacity: pressed ? 0.72 : 1 })}
+			>
+				<View style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.md }}>
+					<ForceAvatar forceCode={profile.forceCode} label="Görev kuvveti" size={48} />
+					<View style={{ flex: 1, gap: spacing.xs }}>
 					<AppText variant="subtitle" weight="800">Görev yerin</AppText>
 					<AppText variant="title" weight="800">{militaryCity}</AppText>
 					<AppText color="muted">
-						{profile.militaryUnit ?? 'Birlik bilgisi henüz eklenmedi'}
+						{profile.militaryUnitNameSnapshot ?? profile.militaryUnit ?? 'Birlik bilgisi henüz eklenmedi'}
 					</AppText>
+					<AppText color="muted" variant="caption">{getForceDisplayName(profile.forceCode)}</AppText>
+					</View>
+					{profile.militaryUnitId ? <Ionicons color={colors.primary} name="chevron-forward" size={20} /> : null}
 				</View>
 				<View style={{ flexDirection: 'row', gap: spacing.md }}>
 					<DetailBlock label="Askerlik türü" value={militaryTypeLabels[profile.militaryType]} />
@@ -103,9 +122,11 @@ export function HomeScreen() {
 						value={getMilitaryPeriodLabel(profile.militaryPeriodYear, profile.militaryPeriodMonth)}
 					/>
 				</View>
-			</View>
+			</Pressable>
 
-			{preparationStatus === 'error' ? (
+			{preparationStatus === 'idle' || preparationStatus === 'loading' ? (
+				<PreparationSummaryPlaceholder />
+			) : preparationStatus === 'error' ? (
 				<Card style={{ gap: spacing.md }}>
 					<AppText variant="subtitle" weight="800">Hazırlık bilgilerin yüklenemedi</AppText>
 					<AppText color="muted">
@@ -207,6 +228,26 @@ export function HomeScreen() {
 	);
 }
 
+function PreparationSummaryPlaceholder() {
+	const { colors, radii, spacing } = useTheme();
+	return (
+		<Card
+			accessibilityLabel="Hazırlık bilgilerin yükleniyor"
+			style={{ gap: spacing.md }}
+		>
+			<View style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.md }}>
+				<View style={{ flex: 1, gap: spacing.sm }}>
+					<AppText variant="subtitle" weight="800">Hazırlığın</AppText>
+					<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radii.pill, height: 12, width: '56%' }} />
+				</View>
+				<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radii.sm, height: 30, width: 56 }} />
+			</View>
+			<View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radii.pill, height: 10, width: '100%' }} />
+			<AppText color="muted" variant="caption">Hazırlık planın yükleniyor…</AppText>
+		</Card>
+	);
+}
+
 function CountdownHeadline({
 	state,
 	daysRemaining,
@@ -260,7 +301,6 @@ function getCountdownAccessibilityLabel(
 	state: ReturnType<typeof getReportingCountdown>['state'],
 	daysRemaining: number | null,
 	reportingDateLabel: string,
-	militaryCity: string,
 ) {
 	const headline = state === 'future' && daysRemaining !== null
 		? `Teslime ${daysRemaining} gün kaldı.`
@@ -269,5 +309,5 @@ function getCountdownAccessibilityLabel(
 			: state === 'past'
 				? 'Teslim tarihin geçmiş görünüyor.'
 				: 'Teslim tarihi görüntülenemedi.';
-	return `${headline} ${reportingDateLabel}. Gideceğin şehir ${militaryCity}.`;
+	return `${headline} ${reportingDateLabel}.`;
 }

@@ -1,9 +1,11 @@
 import type { ProvinceCode } from '@/data/turkeyProvinces';
 import type { MilitaryType } from '@/features/profile/types/profile';
+import type { ForceCode } from '@/features/militaryUnits/types';
 
 export interface PublicProfile {
   userId: string;
   firstName: string;
+  lastName: string | null;
   residenceCity: ProvinceCode;
   departureCity: ProvinceCode;
   militaryCity: ProvinceCode;
@@ -12,6 +14,7 @@ export interface PublicProfile {
   militaryType: MilitaryType;
   militaryUnitId: string | null;
   militaryUnitName: string | null;
+  forceCode: ForceCode | null;
   photoPath: string | null;
   updatedAt: Date;
 }
@@ -26,6 +29,7 @@ export interface DiscoveryReferenceProfile {
   militaryType: MilitaryType;
   militaryUnitId: string | null;
   militaryUnitName: string | null;
+  forceCode: ForceCode | null;
 }
 
 export type DiscoveryQuery = Pick<

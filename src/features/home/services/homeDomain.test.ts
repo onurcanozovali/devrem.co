@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import { getProvinceName } from '@/data/turkeyProvinces';
 import type { PreparationItem } from '@/features/preparation/types/preparation';
 import { getMilitaryPeriodLabel, militaryTypeLabels } from '@/features/profile/profileOptions';
-import { getImportantPreparationState, getReportingCountdown } from './homeDomain';
+import { getImportantPreparationState, getReportingCountdown, getTimeBasedGreeting } from './homeDomain';
 
 const referenceDate = new Date(2026, 7, 8, 23, 45);
 
@@ -98,5 +98,14 @@ describe('home profile labels', () => {
     assert.equal(militaryTypeLabels.standard, 'Er / Erbaş');
     assert.equal(militaryTypeLabels.paid, 'Bedelli');
     assert.equal(getMilitaryPeriodLabel(2026, 8), 'Ağustos 2026');
+  });
+});
+
+describe('home greeting', () => {
+  it('uses the required time windows', () => {
+    assert.equal(getTimeBasedGreeting('Onur', new Date(2026, 7, 8, 5)), 'Günaydın, Onur');
+    assert.equal(getTimeBasedGreeting('Onur', new Date(2026, 7, 8, 12)), 'Tünaydın, Onur');
+    assert.equal(getTimeBasedGreeting('Onur', new Date(2026, 7, 8, 18)), 'İyi akşamlar, Onur');
+    assert.equal(getTimeBasedGreeting('Onur', new Date(2026, 7, 8, 22)), 'İyi geceler, Onur');
   });
 });

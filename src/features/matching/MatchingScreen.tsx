@@ -1,13 +1,12 @@
 import { router, type Href } from 'expo-router';
-import { useCallback } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { useCallback, useRef } from 'react';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/common/EmptyState';
+import { MainTabHeader } from '@/components/common/MainTabHeader';
 import { AppText } from '@/components/ui/AppText';
-import { getProvinceName } from '@/data/turkeyProvinces';
 import { useProfile } from '@/features/profile/hooks/useProfile';
-import { getMilitaryPeriodLabel, militaryTypeLabels } from '@/features/profile/profileOptions';
 import type { UserProfile } from '@/features/profile/types/profile';
 import { useTheme } from '@/theme/ThemeProvider';
 import { DiscoveryProfileRow } from './components/DiscoveryProfileRow';
@@ -37,6 +36,10 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 	const { colors, radii, spacing } = useTheme();
 	const {
 		error,
+		hasMore,
+		isLoadingMore,
+		loadMore,
+		loadMoreError,
 		profiles,
 		reference,
 		retry,
@@ -45,9 +48,7 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 		setSelectedSegment,
 		status,
 	} = useDiscovery(profile);
-	const periodLabel = getMilitaryPeriodLabel(profile.militaryPeriodYear, profile.militaryPeriodMonth);
-	const destinationLabel = getProvinceName(profile.militaryCity);
-
+	const canLoadMoreAfterUserScroll = useRef(false);
 	const openProfile = useCallback((userId: string) => {
 		router.push(`/devre/${userId}` as Href);
 	}, []);
@@ -58,19 +59,23 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 			onPress={openProfile}
 		/>
 	), [openProfile, reference]);
+	const handleEndReached = useCallback(() => {
+		if (!canLoadMoreAfterUserScroll.current) return;
+		canLoadMoreAfterUserScroll.current = false;
+		void loadMore();
+	}, [loadMore]);
+	const enableScrollPagination = useCallback(() => {
+		canLoadMoreAfterUserScroll.current = true;
+	}, []);
 
 	return (
 		<SafeAreaView style={{ backgroundColor: colors.background, flex: 1 }} edges={['top', 'left', 'right']}>
-			<View style={{ gap: spacing.md, paddingTop: spacing.md }}>
-				<View style={{ gap: spacing.xs, paddingHorizontal: spacing.lg }}>
-					<AppText variant="display" weight="900">Devreni Bul</AppText>
-					<AppText color="muted">Aynı dönem, şehir, birlik ve askerlik türündeki kişileri keşfet.</AppText>
-					<AppText weight="800">{periodLabel} · {destinationLabel} · {militaryTypeLabels[profile.militaryType]}</AppText>
-				</View>
+			<View style={{ gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.lg }}>
+				<MainTabHeader title="Devreni Bul" subtitle="Aynı Devre kimliğindeki askerleri keşfet." />
 				<ScrollView
 					horizontal
 					showsHorizontalScrollIndicator={false}
-					contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg }}
+					contentContainerStyle={{ gap: spacing.sm }}
 				>
 					{segments.map((segment) => {
 						const selected = segment.id === selectedSegment;
@@ -87,7 +92,7 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 									borderRadius: radii.pill,
 									borderWidth: 1,
 									justifyContent: 'center',
-									minHeight: 44,
+									minHeight: 36,
 									opacity: pressed ? 0.8 : 1,
 									paddingHorizontal: spacing.md,
 								})}
@@ -122,8 +127,35 @@ function DiscoveryContent({ profile }: { profile: UserProfile }) {
 							description={getDiscoveryEmptyStateCopy(selectedSegment)}
 						/>
 					)}
-					contentContainerStyle={{ flexGrow: 1, paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, paddingTop: spacing.sm }}
+					ListFooterComponent={isLoadingMore ? (
+						<View accessibilityRole="progressbar" accessibilityLabel="Daha fazla devre yükleniyor" style={{ alignItems: 'center', minHeight: 48, paddingVertical: spacing.md }}>
+							<ActivityIndicator color={colors.primary} />
+						</View>
+					) : loadMoreError ? (
+						<Pressable
+							accessibilityRole="button"
+							onPress={() => void loadMore()}
+							style={({ pressed }) => ({ alignItems: 'center', opacity: pressed ? 0.7 : 1, paddingVertical: spacing.md })}
+						>
+							<AppText color="muted" variant="caption">Daha fazla devre yüklenemedi.</AppText>
+							<AppText style={{ color: colors.primary }} variant="caption" weight="800">Tekrar dene</AppText>
+						</Pressable>
+					) : hasMore && profiles.length < 6 ? (
+						<Pressable
+							accessibilityRole="button"
+							onPress={() => void loadMore()}
+							style={({ pressed }) => ({ alignItems: 'center', opacity: pressed ? 0.7 : 1, paddingVertical: spacing.md })}
+						>
+							<AppText style={{ color: colors.primary }} variant="caption" weight="800">Daha fazla eşleşme ara</AppText>
+						</Pressable>
+					) : null}
+					ListHeaderComponent={<View style={{ alignItems: 'center', flexDirection: 'row', paddingBottom: spacing.xs, paddingTop: spacing.sm }}><AppText variant="subtitle" weight="800" style={{ flex: 1 }}>Eşleşmeler</AppText><AppText color="muted" variant="caption" weight="700">{profiles.length} kişi</AppText></View>}
+					contentContainerStyle={{ flexGrow: 1, paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, paddingTop: spacing.xs }}
 					refreshControl={<RefreshControl refreshing={false} onRefresh={retry} tintColor={colors.primary} />}
+					onEndReached={handleEndReached}
+					onEndReachedThreshold={0.25}
+					onMomentumScrollBegin={enableScrollPagination}
+					onScrollBeginDrag={enableScrollPagination}
 					initialNumToRender={8}
 					maxToRenderPerBatch={8}
 					windowSize={7}
@@ -151,7 +183,7 @@ export function MatchingScreen() {
 		return (
 			<SafeAreaView style={{ backgroundColor: colors.background, flex: 1 }}>
 				<View style={{ gap: spacing.lg, padding: spacing.lg }}>
-					<AppText variant="display" weight="900">Devreni Bul</AppText>
+					<MainTabHeader title="Devreni Bul" subtitle="Aynı Devre kimliğindeki askerleri keşfet." />
 					<EmptyState
 						title="Birlik bilgini ekle"
 						description="Devrelerini bulabilmemiz için görev yapacağın birlik bilgisini profilinden ekle."
