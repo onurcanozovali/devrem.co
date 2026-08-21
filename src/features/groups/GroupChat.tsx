@@ -2,12 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, FlatList, Image, Modal, PanResponder, Platform, Pressable, TextInput, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
-import { KeyboardAvoidingView, useResizeMode } from 'react-native-keyboard-controller';
+import { ActivityIndicator, FlatList, Image, Modal, Pressable, TextInput, View, type NativeScrollEvent, type NativeSyntheticEvent, type ViewToken } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { KeyboardController } from 'react-native-keyboard-controller';
+import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
+import { ForceAvatar } from '@/features/militaryUnits/ForceAvatar';
 import type { PublicProfile } from '@/features/matching/types/discovery';
 import { useProfilePhotoURL } from '@/features/profile/hooks/useProfilePhotoURL';
 import {
@@ -16,6 +19,7 @@ import {
   fetchHiddenGroupMessageIds, fetchOlderDevreChatMessages, hideGroupMessageForUser,
   markDevreGroupRead, sendDevreChatMessage, subscribeToGroupReadCursors,
   subscribeToRecentDevreChatMessages, type DevreChatCursor,
+  subscribeToRecentGroupEvents,
   type DevreGroupReadCursor,
 } from '@/services/firebase';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -32,10 +36,11 @@ import {
   collapseDevreChatText, formatChatDate, getDevreChatMessagePreview, isSameMessageCluster, mergeDevreChatMessages, shouldShowDateSeparator,
   updateDevreChatMessageStatus, type DevreChatMessage,
 } from './chatDomain';
-import { countUnseenIncomingMessageIds, isNearLatestOffset } from './chatRuntime';
+import { countUnseenIncomingMessageIds, isNearLatestOffset, shouldTriggerSwipeReply } from './chatRuntime';
 import { prepareChatImage, selectChatPhoto, type SelectedChatImage } from './chatMedia';
 import type { DevreGroup } from './types/groups';
 import { uploadAndSendDevreChatMediaMessage } from './services/sendChatMedia';
+import { useChatKeyboardOffset } from './useChatKeyboardOffset';
 
 function messageTime(message: DevreChatMessage): string {
   return (message.createdAt ?? message.clientCreatedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -46,12 +51,15 @@ function isPermissionDenied(error: unknown): boolean {
     && typeof error.code === 'string' && error.code.includes('permission-denied');
 }
 
+const CHAT_VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 40 } as const;
+
 const MessageRow = memo(function MessageRow({
-  current, groupId, onLongPress, onOpenImage, onOpenReply, onReply, onRetry, own, profile, readByOthers,
-  replyMessage, replySender, showDate, showIdentity,
+  current, groupId, highlighted, onLongPress, onOpenImage, onOpenReply, onReply, onRetry, own, profile, readByOthers,
+  replyMessage, replySender, senderDeparted, showDate, showIdentity,
 }: {
   current: DevreChatMessage;
   groupId: string;
+  highlighted: boolean;
   onLongPress: (message: DevreChatMessage) => void;
   onOpenImage: (image: ChatViewerImage) => void;
   onOpenReply: (messageId: string) => void;
@@ -62,6 +70,7 @@ const MessageRow = memo(function MessageRow({
   readByOthers: boolean;
   replyMessage: DevreChatMessage | null;
   replySender: string | null;
+  senderDeparted: boolean;
   showDate: boolean;
   showIdentity: boolean;
 }) {
@@ -72,16 +81,45 @@ const MessageRow = memo(function MessageRow({
   const timestampColor = own ? colors.chatTimestampMine : colors.chatTimestampOther;
   const collapsedText = current.type === 'text' ? collapseDevreChatText(current.text) : null;
   const [textExpanded, setTextExpanded] = useState(false);
-  const [translateX] = useState(() => new Animated.Value(0));
-  const panResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gesture) => gesture.dx > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.35,
-    onPanResponderMove: (_, gesture) => translateX.setValue(Math.min(76, Math.max(0, gesture.dx))),
-    onPanResponderRelease: (_, gesture) => {
-      if (gesture.dx >= 54) onReply(current);
-      Animated.spring(translateX, { friction: 7, tension: 90, toValue: 0, useNativeDriver: true }).start();
-    },
-    onPanResponderTerminate: () => Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start(),
-  }), [current, onReply, translateX]);
+  const translateX = useSharedValue(0);
+  const highlightOpacity = useSharedValue(0);
+  const triggerLongPress = useCallback(() => onLongPress(current), [current, onLongPress]);
+  const triggerReply = useCallback(() => onReply(current), [current, onReply]);
+  const replyPan = useMemo(() => Gesture.Pan()
+    .activeOffsetX(10)
+    .failOffsetX(-10)
+    .failOffsetY([-12, 12])
+    .onUpdate((event) => {
+      translateX.set(Math.min(72, Math.max(0, event.translationX)));
+    })
+    .onEnd((event) => {
+      if (shouldTriggerSwipeReply(event.translationX, own)) runOnJS(triggerReply)();
+    })
+    .onFinalize(() => {
+      translateX.set(withTiming(0, { duration: 160 }));
+    }), [own, translateX, triggerReply]);
+  const longPress = useMemo(() => Gesture.LongPress()
+    .minDuration(420)
+    .maxDistance(12)
+    .onStart(() => runOnJS(triggerLongPress)()), [triggerLongPress]);
+  const rowGesture = useMemo(() => Gesture.Race(replyPan, longPress), [longPress, replyPan]);
+  const rowSlideStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.get() }] }));
+  const replyIconStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, translateX.get() / 38) }));
+  const highlightStyle = useAnimatedStyle(() => ({ opacity: highlightOpacity.get() }));
+  useEffect(() => {
+    if (!highlighted) {
+      highlightOpacity.set(withTiming(0, { duration: 120 }));
+      return;
+    }
+    highlightOpacity.set(0);
+    highlightOpacity.set(withSequence(
+      withTiming(0.14, { duration: 220 }),
+      withTiming(0.03, { duration: 320 }),
+      withTiming(0.14, { duration: 320 }),
+      withTiming(0, { duration: 520 }),
+      withTiming(0, { duration: 520 }),
+    ));
+  }, [highlightOpacity, highlighted]);
   const status = <View style={{ alignItems: 'center', flexDirection: 'row', flexShrink: 0, gap: 3, marginLeft: spacing.sm }}>
     <AppText variant="caption" style={{ color: timestampColor }}>{messageTime(current)}</AppText>
     {own && current.status === 'pending' ? <Ionicons color={timestampColor} name="time-outline" size={14} /> : null}
@@ -90,12 +128,14 @@ const MessageRow = memo(function MessageRow({
   </View>;
   return <View>
     {showDate ? <View style={{ alignItems: 'center', marginVertical: spacing.md }}><View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radii.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs }}><AppText color="muted" variant="caption" weight="800">{formatChatDate(current.createdAt ?? current.clientCreatedAt)}</AppText></View></View> : null}
-    <View style={{ alignItems: own ? 'flex-end' : 'flex-start', marginBottom: showIdentity ? spacing.sm : 2 }}>
-      {!own && showIdentity ? <View style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.xs, marginBottom: 3, marginLeft: 2 }}><Avatar accessibilityLabel={`${profile?.firstName ?? 'Devre'} profil fotoğrafı`} imageURL={photoURL} initials={(profile?.firstName ?? 'D').charAt(0)} size={27} /><AppText color="muted" variant="caption" weight="800">{profile?.firstName ?? 'Devre'}</AppText></View> : null}
+    <GestureDetector gesture={rowGesture}>
+    <Reanimated.View style={[{ alignItems: own ? 'flex-end' : 'flex-start', marginBottom: showIdentity ? spacing.sm : 2, position: 'relative', width: '100%' }, rowSlideStyle]}>
+      <Reanimated.View pointerEvents="none" style={[{ backgroundColor: colors.primary, bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 }, highlightStyle]} />
+      <Reanimated.View pointerEvents="none" style={[{ alignItems: 'center', height: 44, justifyContent: 'center', left: 8, position: 'absolute', top: '50%', transform: [{ translateY: -22 }], width: 44 }, replyIconStyle]}><Ionicons color={colors.primary} name="return-up-back" size={23} /></Reanimated.View>
+      {!own && showIdentity ? <View style={{ alignItems: 'center', flexDirection: 'row', gap: spacing.xs, marginBottom: 3, marginLeft: 2, opacity: senderDeparted ? 0.72 : 1 }}><Avatar accessibilityLabel={`${profile?.firstName ?? 'Devre'} profil fotoğrafı`} imageURL={photoURL} initials={(profile?.firstName ?? 'D').charAt(0)} size={27} /><View><AppText color="muted" variant="caption" weight="800">{profile?.firstName ?? 'Devre'}</AppText>{senderDeparted ? <AppText color="muted" variant="caption">Artık grupta değil</AppText> : null}</View></View> : null}
       <View style={{ maxWidth: '100%', minWidth: 76 }}>
-      <View pointerEvents="none" style={{ alignItems: 'center', height: 44, justifyContent: 'center', left: 8, position: 'absolute', top: '50%', transform: [{ translateY: -22 }], width: 44 }}><Ionicons color={colors.primary} name="return-up-back" size={23} /></View>
-      <Animated.View {...panResponder.panHandlers} style={{ alignSelf: own ? 'flex-end' : 'flex-start', maxWidth: '84%', transform: [{ translateX }] }}>
-      <Pressable accessibilityRole="button" delayLongPress={420} onLongPress={() => onLongPress(current)} style={{ backgroundColor: bubble, borderColor: own ? bubble : colors.border, borderRadius: radii.md, borderWidth: 1, minWidth: 76, padding: current.type === 'image' && !current.deletedForEveryone ? 4 : spacing.sm }}>
+      <View style={{ alignSelf: own ? 'flex-end' : 'flex-start', maxWidth: '84%' }}>
+      <View style={{ backgroundColor: bubble, borderColor: own ? bubble : colors.border, borderRadius: radii.md, borderWidth: 1, minWidth: 76, padding: current.type === 'image' && !current.deletedForEveryone ? 4 : spacing.sm }}>
         {current.replyToMessageId ? <Pressable accessibilityLabel="Yanıtlanan mesaja git" onPress={() => onOpenReply(current.replyToMessageId!)} style={{ backgroundColor: own ? colors.chatBubbleMine : colors.surfaceSecondary, borderLeftColor: colors.primary, borderLeftWidth: 4, borderRadius: radii.sm, marginBottom: spacing.xs, opacity: 0.92, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }}><AppText style={{ color: colors.primary }} variant="caption" weight="900">{replySender ?? 'Devre'}</AppText><AppText color="muted" numberOfLines={2} variant="caption">{replyMessage ? getDevreChatMessagePreview(replyMessage) : 'Yanıtlanan mesaj'}</AppText></Pressable> : null}
         {current.deletedForEveryone ? <View style={{ alignItems: 'flex-end', flexDirection: 'row' }}><View style={{ alignItems: 'center', flexDirection: 'row', flexShrink: 1, gap: spacing.sm }}><Ionicons color={colors.chatDeletedText} name="ban-outline" size={18} /><AppText style={{ color: colors.chatDeletedText, flexShrink: 1, fontStyle: 'italic' }}>Bu mesaj silindi</AppText></View>{status}</View> : <>
           {current.type === 'text' ? <View style={{ alignItems: 'flex-end', flexDirection: 'row' }}><View style={{ flexShrink: 1 }}><AppText style={{ color: textColor }}>{collapsedText && !textExpanded ? collapsedText : current.text}</AppText>{collapsedText ? <Pressable accessibilityRole="button" onPress={() => setTextExpanded((value) => !value)} style={{ alignSelf: 'flex-start', minHeight: 28, paddingTop: 3 }}><AppText style={{ color: textColor }} variant="caption" weight="900">{textExpanded ? 'Daha az göster' : 'Devamını oku'}</AppText></Pressable> : null}</View>{status}</View> : null}
@@ -103,19 +143,22 @@ const MessageRow = memo(function MessageRow({
           {current.type === 'audio' ? <><AudioMessagePlayer durationMillis={current.durationMillis} groupId={groupId} localUri={current.localMediaUri} mediaPath={current.mediaPath} messageId={current.id} own={own} /><View style={{ alignItems: 'flex-end' }}>{status}</View></> : null}
           {current.type === 'document' ? <><DocumentMessage groupId={groupId} message={current} textColor={textColor} /><View style={{ alignItems: 'flex-end', paddingTop: 3 }}>{status}</View></> : null}
         </>}
-      </Pressable>
-      </Animated.View>
+      </View>
+      </View>
       </View>
       {current.status === 'failed' ? <Pressable accessibilityRole="button" onPress={() => onRetry(current)} style={{ minHeight: 34, justifyContent: 'center' }}><AppText color="danger" variant="caption" weight="800">Tekrar dene</AppText></Pressable> : null}
-    </View>
+    </Reanimated.View>
+    </GestureDetector>
   </View>;
 }, (previous, next) => previous.current === next.current
   && previous.groupId === next.groupId
+  && previous.highlighted === next.highlighted
   && previous.own === next.own
   && previous.profile === next.profile
   && previous.readByOthers === next.readByOthers
   && previous.replyMessage === next.replyMessage
   && previous.replySender === next.replySender
+  && previous.senderDeparted === next.senderDeparted
   && previous.showDate === next.showDate
   && previous.showIdentity === next.showIdentity);
 
@@ -141,9 +184,12 @@ function MessageInfoModal({ cursors, group, message, onClose }: {
 }
 
 export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack?: () => void; userId: string }) {
-  useResizeMode();
   const { colors, spacing } = useTheme();
   const listRef = useRef<FlatList<DevreChatMessage>>(null);
+  const keyboardHeight = useChatKeyboardOffset();
+  const chatContentStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -keyboardHeight.get() }],
+  }));
   const nearLatestRef = useRef(true);
   const [nearLatest, setNearLatest] = useState(true);
   const initializedRef = useRef(false);
@@ -156,6 +202,7 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
     setMessages(next);
   }, []);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const hiddenLookupIdsRef = useRef(new Set<string>());
   const [cursors, setCursors] = useState<DevreGroupReadCursor[]>([]);
   const [cursor, setCursor] = useState<DevreChatCursor | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -174,7 +221,14 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
   const [deleteConfirmation, setDeleteConfirmation] = useState<DevreChatMessage | null>(null);
   const [infoMessage, setInfoMessage] = useState<DevreChatMessage | null>(null);
   const [replyingTo, setReplyingTo] = useState<DevreChatMessage | null>(null);
-  const profiles = useMemo(() => new Map(group.members.map((member) => [member.userId, member])), [group.members]);
+  const [replyFocusRequest, setReplyFocusRequest] = useState(0);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const pendingHighlightIdRef = useRef<string | null>(null);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewableMessageIdsRef = useRef(new Set<string>());
+  const profiles = useMemo(() => new Map(
+    [...group.members, ...group.departedMembers].map((member) => [member.userId, member]),
+  ), [group.departedMembers, group.members]);
   const visibleMessages = useMemo(() => messages.filter((message) => !hiddenIds.has(message.id)), [hiddenIds, messages]);
   const messagesById = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const visibleMessagesRef = useRef(visibleMessages);
@@ -184,10 +238,13 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
     : Math.max(latest, cursor.lastReadMessageCreatedAt.getTime()), 0), [cursors, userId]);
 
   const loadHidden = useCallback((items: readonly DevreChatMessage[]) => {
-    void fetchHiddenGroupMessageIds(userId, group.groupId, items.map((item) => item.id)).then((ids) => {
+    const unqueriedIds = items.map((item) => item.id).filter((id) => !hiddenLookupIdsRef.current.has(id));
+    if (!unqueriedIds.length) return;
+    unqueriedIds.forEach((id) => hiddenLookupIdsRef.current.add(id));
+    void fetchHiddenGroupMessageIds(userId, group.groupId, unqueriedIds).then((ids) => {
       if (!ids.size) return;
       setHiddenIds((current) => new Set([...current, ...ids]));
-    }).catch(() => undefined);
+    }).catch(() => unqueriedIds.forEach((id) => hiddenLookupIdsRef.current.delete(id)));
   }, [group.groupId, userId]);
   useEffect(() => { setActiveDevreGroupChatId(group.groupId); return () => setActiveDevreGroupChatId(null); }, [group.groupId]);
   useEffect(() => subscribeToGroupReadCursors(group.groupId, setCursors), [group.groupId]);
@@ -204,6 +261,9 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
     if (isPermissionDenied(caughtError)) { replaceMessages(() => []); setAccessLost(true); setError('Bu Devre grubuna erişimin sona erdi.'); }
     else setError('Sohbet bağlantısı kesildi. İnternet bağlantını kontrol edip tekrar dene.');
   }), [group.groupId, loadHidden, replaceMessages, userId]);
+  useEffect(() => subscribeToRecentGroupEvents(group.groupId, (events) => {
+    replaceMessages((current) => mergeDevreChatMessages(current, events));
+  }), [group.groupId, replaceMessages]);
   useEffect(() => {
     const latest = visibleMessages[0];
     if (!latest || !nearLatest) return undefined;
@@ -213,8 +273,26 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
   useEffect(() => {
     if (newCount === 0 && nearLatestRef.current) setNearLatest(true);
   }, [newCount]);
+  useEffect(() => () => {
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+  }, []);
 
+  const flashMessage = useCallback((messageId: string) => {
+    pendingHighlightIdRef.current = null;
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    setHighlightedMessageId(messageId);
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedMessageId((current) => current === messageId ? null : current);
+      highlightTimeoutRef.current = null;
+    }, 2100);
+  }, []);
+  const handleViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken<DevreChatMessage>[] }) => {
+    viewableMessageIdsRef.current = new Set(viewableItems.flatMap((token) => token.isViewable && token.item ? [token.item.id] : []));
+    const pendingId = pendingHighlightIdRef.current;
+    if (pendingId && viewableMessageIdsRef.current.has(pendingId)) flashMessage(pendingId);
+  }, [flashMessage]);
   const persist = useCallback(async (message: DevreChatMessage) => {
+    if (message.type === 'system') return;
     replaceMessages((current) => mergeDevreChatMessages(current, [message]));
     try {
       if (message.type !== 'text') {
@@ -229,14 +307,23 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
   }, [group.groupId, replaceMessages]);
   const openImage = useCallback((image: ChatViewerImage) => setViewerImage(image), []);
   const selectMessage = useCallback((message: DevreChatMessage) => setSelectedMessage(message), []);
-  const replyToMessage = useCallback((message: DevreChatMessage) => setReplyingTo(message), []);
+  const replyToMessage = useCallback((message: DevreChatMessage) => {
+    setReplyingTo(message);
+    setReplyFocusRequest((current) => current + 1);
+  }, []);
   const stopReply = useCallback(() => setReplyingTo(null), []);
-  const openAttachments = useCallback(() => setAttachmentOpen(true), []);
+  const openAttachments = useCallback(() => {
+    void KeyboardController.dismiss();
+    setAttachmentOpen(true);
+  }, []);
   const retryMessage = useCallback((message: DevreChatMessage) => void persist({ ...message, status: 'pending' }), [persist]);
   const openReply = useCallback((messageId: string) => {
     const index = visibleMessagesRef.current.findIndex((message) => message.id === messageId);
-    if (index >= 0) listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
-  }, []);
+    if (index < 0) return;
+    if (viewableMessageIdsRef.current.has(messageId)) flashMessage(messageId);
+    else pendingHighlightIdRef.current = messageId;
+    listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+  }, [flashMessage]);
   const scrollToLatest = useCallback((animated = true) => {
     listRef.current?.scrollToOffset({ animated, offset: 0 });
     nearLatestRef.current = true;
@@ -269,7 +356,7 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
     return [
       ...(own && selectedMessage.status === 'sent' ? [{ icon: 'information-circle-outline' as const, label: 'Bilgi', onPress: () => setInfoMessage(selectedMessage) }] : []),
       ...(selectedMessage.type === 'text' && !selectedMessage.deletedForEveryone ? [{ icon: 'copy-outline' as const, label: 'Kopyala', onPress: () => void Clipboard.setStringAsync(selectedMessage.text) }] : []),
-      { icon: 'return-up-back-outline' as const, label: 'Yanıtla', onPress: () => setReplyingTo(selectedMessage) },
+      { icon: 'return-up-back-outline' as const, label: 'Yanıtla', onPress: () => replyToMessage(selectedMessage) },
       { icon: 'eye-off-outline' as const, label: 'Benden Sil', onPress: () => hideSelected(selectedMessage) },
       ...(own && selectedMessage.status === 'sent' && !selectedMessage.deletedForEveryone ? [{ destructive: true, icon: 'trash-outline' as const, label: 'Herkesten Sil', onPress: () => setDeleteConfirmation(selectedMessage) }] : []),
     ];
@@ -288,22 +375,25 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
       contentInsetAdjustmentBehavior="never"
       data={visibleMessages}
       inverted
-      keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}
-      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="none"
+      keyboardShouldPersistTaps="always"
       keyExtractor={(message) => message.id}
       onEndReached={() => void loadOlder()}
       onEndReachedThreshold={0.25}
       onScroll={handleScroll}
       onScrollToIndexFailed={({ index }) => listRef.current?.scrollToOffset({ animated: true, offset: Math.max(0, index * 72) })}
+      onViewableItemsChanged={handleViewableItemsChanged}
       removeClippedSubviews={false}
       scrollEventThrottle={32}
       ListEmptyComponent={<View style={{ alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl }}>{initialLoading ? <ActivityIndicator color={colors.primary} /> : <><AppText weight="800">{accessLost ? 'Sohbet erişimi kapandı' : 'Henüz mesaj yok.'}</AppText><AppText color="muted">{accessLost ? 'Güncel grubun hazır olduğunda burada görünecek.' : 'İlk mesajı sen gönder.'}</AppText></>}</View>}
       ListFooterComponent={loadingOlder ? <ActivityIndicator color={colors.primary} /> : null}
       renderItem={({ item, index }) => {
+        if (item.type === 'system') return <View style={{ alignItems: 'center', marginVertical: spacing.sm }}><View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 999, paddingHorizontal: spacing.md, paddingVertical: spacing.xs }}><AppText color="muted" variant="caption" weight="700">{item.text}</AppText></View></View>;
         const replyMessage = item.replyToMessageId ? messagesById.get(item.replyToMessageId) ?? null : null;
         return <MessageRow
           current={item}
           groupId={group.groupId}
+          highlighted={item.id === highlightedMessageId}
           onLongPress={selectMessage}
           onOpenImage={openImage}
           onOpenReply={openReply}
@@ -314,25 +404,27 @@ export function GroupChat({ group, onBack, userId }: { group: DevreGroup; onBack
           readByOthers={Boolean(item.createdAt && readCutoff >= item.createdAt.getTime())}
           replyMessage={replyMessage}
           replySender={replyMessage ? (profiles.get(replyMessage.senderUid)?.firstName ?? 'Devre') : null}
+          senderDeparted={group.membershipStatusByUid[item.senderUid] === 'left'}
           showDate={shouldShowDateSeparator(visibleMessages[index + 1], item)}
           showIdentity={!isSameMessageCluster(visibleMessages[index + 1], item)}
         />;
       }}
+      viewabilityConfig={CHAT_VIEWABILITY_CONFIG}
     />
     {!nearLatest ? <Pressable accessibilityLabel="En yeni mesaja git" accessibilityRole="button" onPress={() => scrollToLatest()} style={{ alignItems: 'center', alignSelf: 'center', backgroundColor: colors.primary, borderRadius: 22, bottom: spacing.md, flexDirection: 'row', gap: spacing.xs, minHeight: 44, paddingHorizontal: spacing.md, position: 'absolute' }}><AppText style={{ color: colors.textInverse }} weight="800">{newCount ? `${newCount} yeni mesaj` : 'Yeni mesajlar'}</AppText><Ionicons color={colors.textInverse} name="arrow-down" size={18} /></Pressable> : null}
   </View>;
-  const chatRuntime = <View style={{ flex: 1 }}>
-    {messageList}
-    <ChatComposer disabled={accessLost} nativeID="devre-group-chat-input" onAttachment={openAttachments} onSend={sendText} onStopReply={stopReply} replyPreview={replyingTo ? getDevreChatMessagePreview(replyingTo) : null} replySender={replyingTo ? (profiles.get(replyingTo.senderUid)?.firstName ?? 'Devre') : null} />
+  const composer = <ChatComposer disabled={accessLost} focusRequest={replyFocusRequest} nativeID="devre-group-chat-input" onAttachment={openAttachments} onSend={sendText} onStopReply={stopReply} replyPreview={replyingTo ? getDevreChatMessagePreview(replyingTo) : null} replySender={replyingTo ? (profiles.get(replyingTo.senderUid)?.firstName ?? 'Devre') : null} />;
+  const chatRuntime = <View style={{ flex: 1, overflow: 'hidden' }}>
+    <Reanimated.View style={[{ flex: 1 }, chatContentStyle]}>{messageList}{composer}</Reanimated.View>
   </View>;
   return <SafeAreaView edges={['top']} style={{ backgroundColor: colors.chatBackground, flex: 1 }}>
     <View style={{ alignItems: 'center', backgroundColor: colors.surface, borderBottomColor: colors.divider, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.sm, minHeight: 58, paddingHorizontal: spacing.sm }}>
       <Pressable accessibilityLabel="Geri dön" onPress={onBack ?? (() => router.canGoBack() ? router.back() : router.replace('/(tabs)/chats'))} style={{ alignItems: 'center', height: 48, justifyContent: 'center', width: 42 }}><Ionicons color={colors.textPrimary} name="arrow-back" size={25} /></Pressable>
-      <Pressable onPress={() => router.push({ pathname: '/group-info/[groupId]', params: { groupId: group.groupId } })} style={{ alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.sm }}><Avatar accessibilityLabel="Devre grubu" imageURL={null} initials={(group.militaryUnitName ?? 'D').charAt(0)} size={42} /><View style={{ flex: 1 }}><AppText numberOfLines={1} weight="900">{group.militaryUnitName ?? 'Devre Grubu'}</AppText><AppText color="muted" variant="caption">{group.members.length} üye</AppText></View></Pressable>
+      <Pressable onPress={() => router.push({ pathname: '/group-info/[groupId]', params: { groupId: group.groupId } })} style={{ alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.sm }}><ForceAvatar forceCode={group.forceCode} size={42} /><View style={{ flex: 1 }}><AppText numberOfLines={1} weight="900">{group.kind === 'travel' ? 'Yol Arkadaşları' : 'Devre Grubu'}</AppText><AppText color="muted" numberOfLines={1} variant="caption">{group.militaryUnitName ?? 'Birlik bilgisi yok'} · {group.members.length} üye</AppText></View></Pressable>
       <Pressable accessibilityLabel="Grup bilgisi" onPress={() => router.push({ pathname: '/group-info/[groupId]', params: { groupId: group.groupId } })} style={{ alignItems: 'center', height: 48, justifyContent: 'center', width: 42 }}><Ionicons color={colors.textPrimary} name="ellipsis-vertical" size={22} /></Pressable>
     </View>
     {error ? <View style={{ backgroundColor: colors.surfaceSecondary, padding: spacing.sm }}><AppText color="danger" variant="caption">{error}</AppText></View> : null}
-    {Platform.OS === 'ios' ? <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>{chatRuntime}</KeyboardAvoidingView> : chatRuntime}
+    {chatRuntime}
     <ChatBottomSheet actions={attachmentActions} onClose={() => setAttachmentOpen(false)} title="Ekle" visible={attachmentOpen} />
     <ChatBottomSheet actions={messageActions} onClose={() => setSelectedMessage(null)} visible={Boolean(selectedMessage)} />
     <ChatBottomSheet actions={deleteConfirmation ? [{ destructive: true, icon: 'trash-outline', label: 'Herkes için sil', onPress: () => { deleteForEveryone(deleteConfirmation); setDeleteConfirmation(null); } }] : []} onClose={() => setDeleteConfirmation(null)} title="Bu mesaj herkesten silinsin mi?" visible={Boolean(deleteConfirmation)} />

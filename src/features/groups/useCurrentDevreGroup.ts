@@ -1,73 +1,98 @@
-import { useCallback, useEffect, useState } from 'react';
+import { hasExactDevreIdentity } from '@devrem/devre-domain';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useProfile } from '@/features/profile/hooks/useProfile';
-import { fetchCurrentDevreGroup } from '@/services/firebase';
-import type { DevreGroupResult } from './types/groups';
+import {
+  fetchCurrentDevreGroupSummaries,
+  subscribeToCurrentGroupMemberships,
+  type CurrentGroupMembership,
+} from '@/services/firebase';
+import type { DevreGroupResult, DevreGroupSummary } from './types/groups';
 
-interface CachedGroupState {
-  key: string;
-  result: DevreGroupResult | null;
+const groupSnapshotsByUid = new Map<string, readonly DevreGroupSummary[]>();
+
+function derivePrimaryResult(groups: readonly DevreGroupSummary[]): DevreGroupResult {
+  const primaryGroup = groups.find((group) => group.kind === 'devre');
+  return primaryGroup
+    ? { status: 'ready', group: primaryGroup, acknowledged: false }
+    : { status: 'pending', group: null, acknowledged: false };
 }
 
-const resultCache = new Map<string, DevreGroupResult>();
-const requestCache = new Map<string, Promise<DevreGroupResult>>();
-
-function fetchCachedCurrentDevreGroup(key: string, uid: string): Promise<DevreGroupResult> {
-  const cached = resultCache.get(key);
-  if (cached) return Promise.resolve(cached);
-  const pending = requestCache.get(key);
-  if (pending) return pending;
-  const request = fetchCurrentDevreGroup(uid).then((result) => {
-    resultCache.set(key, result);
-    requestCache.delete(key);
-    return result;
-  }, (error: unknown) => {
-    requestCache.delete(key);
-    throw error;
-  });
-  requestCache.set(key, request);
-  return request;
+function belongsToCurrentProfile(group: DevreGroupSummary, profile: NonNullable<ReturnType<typeof useProfile>['profile']>): boolean {
+  return hasExactDevreIdentity({
+    militaryCity: profile.militaryCity,
+    militaryPeriodMonth: profile.militaryPeriodMonth,
+    militaryPeriodYear: profile.militaryPeriodYear,
+    militaryType: profile.militaryType,
+    militaryUnitId: profile.militaryUnitId,
+    militaryUnitName: profile.militaryUnitNameSnapshot ?? profile.militaryUnit,
+  }, group) && (group.kind !== 'travel' || group.departureCity === profile.departureCity);
 }
 
 export function useCurrentDevreGroup() {
   const { session } = useAuth();
   const { profile } = useProfile();
   const [error, setError] = useState<string | null>(null);
-  const [requestVersion, setRequestVersion] = useState(0);
-  const identityVersion = profile
-    ? `${profile.militaryPeriodYear}:${profile.militaryPeriodMonth}:${profile.militaryCity}:${profile.militaryType}:${profile.militaryUnit ?? ''}`
-    : '';
-  const cacheKey = session && profile ? `${session.userId}:${identityVersion}` : '';
-  const [state, setState] = useState<CachedGroupState>(() => ({
-    key: cacheKey,
-    result: cacheKey ? resultCache.get(cacheKey) ?? null : null,
-  }));
-  const result = state.key === cacheKey ? state.result : resultCache.get(cacheKey) ?? null;
+  const cachedGroups = session ? groupSnapshotsByUid.get(session.userId) : undefined;
+  const [result, setResultState] = useState<DevreGroupResult | null>(() => cachedGroups ? derivePrimaryResult(cachedGroups) : null);
+  const [groups, setGroups] = useState<readonly DevreGroupSummary[]>(() => cachedGroups ?? []);
+  const [subscriptionVersion, setSubscriptionVersion] = useState(0);
+  const requestVersion = useRef(0);
 
-  useEffect(() => {
-    if (!session || !cacheKey) return;
-    let cancelled = false;
-    void fetchCachedCurrentDevreGroup(cacheKey, session.userId).then((nextResult) => {
-      if (!cancelled) { setState({ key: cacheKey, result: nextResult }); setError(null); }
-    }).catch(() => {
-      if (!cancelled) setError('Devre grubun yüklenemedi. İnternet bağlantını kontrol edip tekrar dene.');
-    });
-    return () => { cancelled = true; };
-  }, [cacheKey, requestVersion, session]);
+  const load = useCallback(async (memberships: readonly CurrentGroupMembership[]) => {
+    if (!session || !profile) return;
+    const version = ++requestVersion.current;
+    try {
+      const nextGroups = await fetchCurrentDevreGroupSummaries(memberships);
+      if (version !== requestVersion.current) return;
+      const currentGroups = nextGroups.filter((group) => belongsToCurrentProfile(group, profile));
+      const currentPrimary = derivePrimaryResult(currentGroups);
+      groupSnapshotsByUid.set(session.userId, currentGroups);
+      setGroups(currentGroups);
+      setResultState(currentPrimary);
+      setError(null);
+    } catch {
+      if (version !== requestVersion.current) return;
+      setError('Grupların yüklenemedi. İnternet bağlantını kontrol edip tekrar dene.');
+    }
+  }, [profile, session]);
+
+  useFocusEffect(useCallback(() => {
+    if (!session || !profile) return undefined;
+    if (__DEV__) console.debug('[perf] subscribe current group summaries', { subscriptionVersion });
+    const unsubscribe = subscribeToCurrentGroupMemberships(
+      session.userId,
+      (memberships) => void load(memberships),
+      () => setError('Grup üyeliğin takip edilemedi. Tekrar dene.'),
+    );
+    return () => {
+      requestVersion.current += 1;
+      unsubscribe();
+      if (__DEV__) console.debug('[perf] unsubscribe current group summaries');
+    };
+  }, [load, profile, session, subscriptionVersion]));
 
   const retry = useCallback(() => {
-    resultCache.delete(cacheKey);
-    requestCache.delete(cacheKey);
-    setState({ key: cacheKey, result: null });
     setError(null);
-    setRequestVersion((current) => current + 1);
-  }, [cacheKey]);
+    setSubscriptionVersion((current) => current + 1);
+  }, []);
 
   const setResult = useCallback((nextResult: DevreGroupResult) => {
-    if (cacheKey) resultCache.set(cacheKey, nextResult);
-    setState({ key: cacheKey, result: nextResult });
-  }, [cacheKey]);
+    setResultState(nextResult);
+    if (nextResult.status === 'ready') {
+      setGroups((current) => {
+        const nextGroups = current.map((group) => group.kind === 'devre' ? nextResult.group : group);
+        if (session) groupSnapshotsByUid.set(session.userId, nextGroups);
+        return nextGroups;
+      });
+    }
+  }, [session]);
 
-  return { error, profile, result, retry, session, setResult };
+  const visibleGroups = profile ? groups.filter((group) => belongsToCurrentProfile(group, profile)) : [];
+  const visibleResult = result?.status === 'ready' && profile && !belongsToCurrentProfile(result.group, profile)
+    ? { status: 'pending', group: null, acknowledged: false } as const
+    : result;
+  return { error, groups: visibleGroups, profile, result: visibleResult, retry, session, setResult };
 }

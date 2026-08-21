@@ -8,17 +8,23 @@ import { LoadingState } from '@/components/common/LoadingState';
 import { ScreenContainer } from '@/components/common/ScreenContainer';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { DevremConfirmModal } from '@/components/ui/DevremConfirmModal';
 import { getProvinceName } from '@/data/turkeyProvinces';
+import { getCachedVisibleDirectConversationId, rememberVisibleDirectConversation } from '@/features/directMessages/directConversationCache';
 import { useProfilePhotoURL } from '@/features/profile/hooks/useProfilePhotoURL';
 import { getMilitaryPeriodLabel, militaryTypeLabels } from '@/features/profile/profileOptions';
-import { fetchPublicProfile } from '@/services/firebase';
+import { getOrCreateDirectConversation, fetchPublicProfile, subscribeToDirectBlockState, unblockDirectMessageUser } from '@/services/firebase';
+import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useTheme } from '@/theme/ThemeProvider';
 import { mapDiscoveryError } from './services/discoveryErrors';
 import type { PublicProfile } from './types/discovery';
+import { getPublicProfileDisplayName } from './services/discoveryDomain';
 
 function PublicProfileContent({ profile }: { profile: PublicProfile }) {
   const { colors, spacing } = useTheme();
   const photoURL = useProfilePhotoURL(profile.userId, profile.photoPath, profile.updatedAt);
+  const displayName = getPublicProfileDisplayName(profile);
   const details = [
     ['Yaşadığı şehir', getProvinceName(profile.residenceCity)],
     ['Gideceği şehir', getProvinceName(profile.militaryCity)],
@@ -32,12 +38,12 @@ function PublicProfileContent({ profile }: { profile: PublicProfile }) {
     <View style={{ gap: spacing.xl }}>
       <View style={{ alignItems: 'center', gap: spacing.md }}>
         <Avatar
-          accessibilityLabel={profile.photoPath ? `${profile.firstName} profil fotoğrafı` : `${profile.firstName} baş harfi`}
+          accessibilityLabel={profile.photoPath ? `${displayName} profil fotoğrafı` : `${displayName} baş harfi`}
           imageURL={photoURL}
           initials={profile.firstName.charAt(0).toLocaleUpperCase('tr-TR')}
           size={112}
         />
-        <AppText variant="title" weight="900">{profile.firstName}</AppText>
+        <AppText variant="title" weight="900">{displayName}</AppText>
       </View>
       <View style={{ gap: spacing.lg }}>
         {details.map(([label, value]) => (
@@ -52,6 +58,7 @@ function PublicProfileContent({ profile }: { profile: PublicProfile }) {
 }
 
 export function PublicProfileScreen() {
+  const { session } = useAuth();
   const { colors, spacing } = useTheme();
   const params = useLocalSearchParams<{ userId?: string | string[] }>();
   const userId = typeof params.userId === 'string' ? params.userId : '';
@@ -59,6 +66,11 @@ export function PublicProfileScreen() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [requestVersion, setRequestVersion] = useState(0);
+  const [startingMessage, setStartingMessage] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState(false);
+  const [unblockOpen, setUnblockOpen] = useState(false);
+  const [unblocking, setUnblocking] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,10 +90,43 @@ export function PublicProfileScreen() {
     };
   }, [requestVersion, userId]);
 
+  useEffect(() => session && userId && session.userId !== userId
+    ? subscribeToDirectBlockState(session.userId, userId, setBlocked)
+    : undefined, [session, userId]);
+
   const retry = () => {
     setError(null);
     setStatus('loading');
     setRequestVersion((current) => current + 1);
+  };
+  const openDirectMessage = async () => {
+    if (!profile || !session || startingMessage) return;
+    const cachedConversationId = getCachedVisibleDirectConversationId(session.userId, profile.userId);
+    if (cachedConversationId) {
+      router.push({ pathname: '/direct-chat/[conversationId]', params: { conversationId: cachedConversationId } });
+      return;
+    }
+    setStartingMessage(true);
+    setMessageError(null);
+    try {
+      const conversationId = await getOrCreateDirectConversation(profile.userId);
+      rememberVisibleDirectConversation(session.userId, profile.userId, conversationId);
+      router.push({ pathname: '/direct-chat/[conversationId]', params: { conversationId } });
+    } catch (caughtError: unknown) {
+      const code = caughtError instanceof Error ? caughtError.message : '';
+      setMessageError(code.includes('direct-messages-disabled')
+        ? 'Bu kullanıcı özel mesajları kapatmış.'
+        : code.includes('blocked') ? 'Bu kullanıcıyla mesajlaşamazsın.' : 'Özel sohbet açılamadı. Tekrar dene.');
+    } finally {
+      setStartingMessage(false);
+    }
+  };
+  const unblock = async () => {
+    if (!session || unblocking) return;
+    setUnblocking(true); setMessageError(null);
+    try { await unblockDirectMessageUser(session.userId, userId); setUnblockOpen(false); }
+    catch { setMessageError('Engel kaldırılamadı. Tekrar dene.'); }
+    finally { setUnblocking(false); }
   };
 
   return (
@@ -99,7 +144,9 @@ export function PublicProfileScreen() {
         <AppText variant="title" weight="800">Devre Profili</AppText>
       </View>
       {status === 'loading' ? <LoadingState label="Devre profili yükleniyor…" /> : null}
-      {status === 'ready' && profile ? <PublicProfileContent profile={profile} /> : null}
+      {status === 'ready' && profile ? <><PublicProfileContent profile={profile} />{session?.userId !== profile.userId ? blocked
+        ? <Button label="Engeli kaldır" variant="secondary" onPress={() => setUnblockOpen(true)} />
+        : <Button label="Mesaj Gönder" loading={startingMessage} onPress={() => void openDirectMessage()} /> : null}{messageError ? <AppText color="danger" variant="caption" accessibilityLiveRegion="polite">{messageError}</AppText> : null}</> : null}
       {status === 'missing' ? (
         <EmptyState title="Profil bulunamadı" description="Bu devre profili artık görüntülenemiyor." />
       ) : null}
@@ -111,6 +158,7 @@ export function PublicProfileScreen() {
           onAction={retry}
         />
       ) : null}
+      <DevremConfirmModal confirmLabel="Engeli kaldır" description="Bu kullanıcıyla mevcut özel sohbetin yeniden kullanılabilir olacak." error={messageError} loading={unblocking} onClose={() => setUnblockOpen(false)} onConfirm={() => void unblock()} title="Engeli kaldır?" visible={unblockOpen} />
     </ScreenContainer>
   );
 }

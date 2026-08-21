@@ -3,7 +3,7 @@ import type { DevreChatMessage } from '../chatDomain';
 
 export async function uploadAndSendDevreChatMediaMessage(
   groupId: string,
-  message: Exclude<DevreChatMessage, { type: 'text' }>,
+  message: Extract<DevreChatMessage, { type: 'image' | 'audio' | 'document' }>,
 ): Promise<void> {
   if (!message.localMediaUri) throw new Error('missing-local-media');
   await uploadChatMedia({

@@ -40,10 +40,18 @@ export function parseNotificationPreferences(value: unknown): NotificationPrefer
 export function parseNotificationTarget(data: unknown): NotificationTarget | null {
   if (!isRecord(data)) return null;
   if (
+    data.type === 'direct_message'
+    && data.target === 'directChat'
+    && typeof data.conversationId === 'string'
+    && /^direct-v1-[a-f0-9]{64}$/.test(data.conversationId)
+    && typeof data.eventId === 'string'
+    && data.eventId.trim().length > 0
+  ) return { conversationId: data.conversationId, eventId: data.eventId, target: 'directChat' };
+  if (
     data.type === 'group.message'
     && data.target === 'groupChat'
     && typeof data.groupId === 'string'
-    && /^devre-v1-[a-f0-9]{64}$/.test(data.groupId)
+    && /^(devre|travel)-v1-[a-f0-9]{64}$/.test(data.groupId)
     && typeof data.eventId === 'string'
     && data.eventId.trim().length > 0
   ) {

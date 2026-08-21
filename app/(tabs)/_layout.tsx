@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
+import type { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { rememberGroupChatReturnTab } from '@/features/groups/groupChatNavigation';
@@ -10,11 +11,15 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 
 const tabIcons: Record<string, IconName> = {
   index: 'home-outline',
+  matching: 'search-outline',
+  chats: 'chatbubble-outline',
   preparation: 'checkmark-circle-outline',
-  matching: 'people-outline',
-  chats: 'people-circle-outline',
   profile: 'person-outline',
 };
+
+function TabIcon({ color, name, size }: { color: ColorValue; name: string; size: number }) {
+  return <Ionicons name={tabIcons[name] ?? 'ellipse-outline'} color={color} size={size} />;
+}
 
 export default function TabLayout() {
   const { colors } = useTheme();
@@ -37,7 +42,7 @@ export default function TabLayout() {
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarIcon: ({ color, size }) => (
-          <Ionicons name={tabIcons[route.name] ?? 'ellipse-outline'} color={color} size={size} />
+          <TabIcon color={color} name={route.name} size={size} />
         ),
       })}
     >
@@ -52,7 +57,7 @@ export default function TabLayout() {
             rememberGroupChatReturnTab(state.routes[state.index]?.name);
           },
         })}
-        options={{ title: 'Devre Grubum' }}
+        options={{ title: 'Sohbetler' }}
       />
       <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
     </Tabs>

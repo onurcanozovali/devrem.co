@@ -9,11 +9,11 @@ import {
   rememberGroupChatReturnTab,
 } from './groupChatNavigation';
 
-test('group chat remembers a safe previous tab and ignores the chat tab itself', () => {
+test('group chat remembers every safe return tab including the group list', () => {
   rememberGroupChatReturnTab('matching');
   assert.equal(getGroupChatReturnPath(), '/(tabs)/matching');
   rememberGroupChatReturnTab('chats');
-  assert.equal(getGroupChatReturnPath(), '/(tabs)/matching');
+  assert.equal(getGroupChatReturnPath(), '/(tabs)/chats');
   rememberGroupChatReturnTab('profile');
   assert.equal(getGroupChatReturnPath(), '/(tabs)/profile');
 });
